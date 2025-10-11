@@ -13,6 +13,7 @@ public class User : AuditableEntity
     public string? District { get; set; }
     public Guid? RoleId { get; set; }
     public bool IsActive { get; set; } = true;
+    public string PasswordHash { get; set; } = string.Empty;
 
     // Navigation properties
     public virtual Role? Role { get; set; }

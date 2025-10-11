@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PetCare.Application.Services.Interfaces;
 using PetCare.Application.DTOs.User;
@@ -6,6 +7,7 @@ namespace PetCare.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize(Roles = "admin")]
 public class UsersController : ControllerBase
 {
     private readonly IUserService _userService;
@@ -106,6 +108,33 @@ public class UsersController : ControllerBase
             return NotFound(result);
         }
         
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Update user role
+    /// </summary>
+    [HttpPut("{id}/role")]
+    public async Task<IActionResult> SetRole(Guid id, [FromBody] SetUserRoleDto setUserRoleDto)
+    {
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(ModelState);
+        }
+
+        var result = await _userService.SetUserRoleAsync(id, setUserRoleDto);
+
+        if (!result.Success)
+        {
+            if (string.Equals(result.Message, "User not found", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(result.Message, "Specified role not found", StringComparison.OrdinalIgnoreCase))
+            {
+                return NotFound(result);
+            }
+
+            return BadRequest(result);
+        }
+
         return Ok(result);
     }
 

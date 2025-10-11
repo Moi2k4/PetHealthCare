@@ -4,6 +4,7 @@ using PetCare.Application.Common;
 using PetCare.Application.Services.Interfaces;
 using PetCare.Infrastructure.Repositories.Interfaces;
 using PetCare.Domain.Entities;
+using BCryptNet = BCrypt.Net.BCrypt;
 
 namespace PetCare.Application.Services.Implementations;
 
@@ -97,7 +98,13 @@ public class UserService : IUserService
                 return ServiceResult<UserDto>.FailureResult("Email already exists");
             }
 
+            if (string.IsNullOrWhiteSpace(createUserDto.Password))
+            {
+                return ServiceResult<UserDto>.FailureResult("Password is required");
+            }
+
             var user = _mapper.Map<User>(createUserDto);
+            user.PasswordHash = BCryptNet.HashPassword(createUserDto.Password);
             await _unitOfWork.Users.AddAsync(user);
             await _unitOfWork.SaveChangesAsync();
 
@@ -122,6 +129,11 @@ public class UserService : IUserService
             }
 
             _mapper.Map(updateUserDto, user);
+
+            if (!string.IsNullOrWhiteSpace(updateUserDto.NewPassword))
+            {
+                user.PasswordHash = BCryptNet.HashPassword(updateUserDto.NewPassword);
+            }
             await _unitOfWork.Users.UpdateAsync(user);
             await _unitOfWork.SaveChangesAsync();
 
@@ -131,6 +143,62 @@ public class UserService : IUserService
         catch (Exception ex)
         {
             return ServiceResult<UserDto>.FailureResult($"Error updating user: {ex.Message}");
+        }
+    }
+
+    public async Task<ServiceResult<UserDto>> SetUserRoleAsync(Guid userId, SetUserRoleDto setUserRoleDto)
+    {
+        try
+        {
+            if (!setUserRoleDto.RoleId.HasValue && string.IsNullOrWhiteSpace(setUserRoleDto.RoleName))
+            {
+                return ServiceResult<UserDto>.FailureResult("RoleId or RoleName must be provided");
+            }
+
+            var user = await _unitOfWork.Users.GetUserWithRoleAsync(userId);
+
+            if (user == null)
+            {
+                return ServiceResult<UserDto>.FailureResult("User not found");
+            }
+
+            var roleRepository = _unitOfWork.Repository<Role>();
+            Role? role = null;
+
+            if (setUserRoleDto.RoleId.HasValue)
+            {
+                role = await roleRepository.GetByIdAsync(setUserRoleDto.RoleId.Value);
+            }
+
+            if (role == null && !string.IsNullOrWhiteSpace(setUserRoleDto.RoleName))
+            {
+                var normalizedRoleName = setUserRoleDto.RoleName.Trim();
+                role = await roleRepository.FirstOrDefaultAsync(r => r.RoleName == normalizedRoleName);
+            }
+
+            if (role == null)
+            {
+                return ServiceResult<UserDto>.FailureResult("Specified role not found");
+            }
+
+            if (user.RoleId == role.Id)
+            {
+                var existingRoleDto = _mapper.Map<UserDto>(user);
+                return ServiceResult<UserDto>.SuccessResult(existingRoleDto, "User already has this role");
+            }
+
+            user.RoleId = role.Id;
+            user.Role = role;
+
+            await _unitOfWork.Users.UpdateAsync(user);
+            await _unitOfWork.SaveChangesAsync();
+
+            var userDto = _mapper.Map<UserDto>(user);
+            return ServiceResult<UserDto>.SuccessResult(userDto, "User role updated successfully");
+        }
+        catch (Exception ex)
+        {
+            return ServiceResult<UserDto>.FailureResult($"Error updating user role: {ex.Message}");
         }
     }
 

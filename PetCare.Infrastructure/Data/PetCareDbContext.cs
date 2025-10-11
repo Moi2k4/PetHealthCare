@@ -94,6 +94,7 @@ public class PetCareDbContext : DbContext
             entity.Property(e => e.IsActive).HasColumnName("is_active");
             entity.Property(e => e.CreatedAt).HasColumnName("created_at");
             entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+            entity.Property(e => e.PasswordHash).HasColumnName("password_hash").IsRequired();
 
             entity.HasOne(e => e.Role)
                 .WithMany(r => r.Users)
@@ -275,6 +276,7 @@ public class PetCareDbContext : DbContext
             entity.Property(e => e.DisplayOrder).HasColumnName("display_order");
             entity.Property(e => e.IsActive).HasColumnName("is_active");
             entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+            entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
 
             entity.HasOne(e => e.ParentCategory)
                 .WithMany(c => c.SubCategories)

@@ -10,4 +10,5 @@ public class CreateUserDto
     public string? City { get; set; }
     public string? District { get; set; }
     public Guid? RoleId { get; set; }
+    public string Password { get; set; } = string.Empty;
 }
