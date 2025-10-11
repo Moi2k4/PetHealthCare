@@ -3,6 +3,7 @@ using PetCare.Application.DTOs.Product;
 using PetCare.Application.Common;
 using PetCare.Application.Services.Interfaces;
 using PetCare.Infrastructure.Repositories.Interfaces;
+using PetCare.Domain.Entities;
 
 namespace PetCare.Application.Services.Implementations;
 
@@ -41,12 +42,14 @@ public class ProductService : IProductService
     {
         try
         {
-            var (products, totalCount) = await _unitOfWork.Products.GetPagedAsync(
+            (IEnumerable<Product> products, int totalCount) = await _unitOfWork.Products.GetPagedAsync(
                 page,
                 pageSize,
                 filter: p => p.IsActive,
                 orderBy: q => q.OrderBy(p => p.ProductName),
-                includes: new[] { p => p.Category!, p => p.Brand!, p => p.Images }
+                p => p.Category!,
+                p => p.Brand!,
+                p => p.Images
             );
 
             var productDtos = _mapper.Map<IEnumerable<ProductDto>>(products);
