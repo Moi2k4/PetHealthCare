@@ -40,8 +40,9 @@ bld/
 ## Environment variables
 .env
 .env.local
+.env.*.local
 
-## appsettings
+## appsettings with secrets
 appsettings.Development.json
-appsettings.*.json
-!appsettings.json
+appsettings.Production.json
+appsettings.Staging.json

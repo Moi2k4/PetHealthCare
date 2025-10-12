@@ -10,7 +10,23 @@ using PetCare.Infrastructure.Repositories.Implementations;
 using PetCare.Application.Services.Interfaces;
 using PetCare.Application.Services.Implementations;
 
+// Load environment variables from .env file
+// Look for .env in the solution root (parent directory of PetCare.API)
+var envPath = Path.Combine(Directory.GetCurrentDirectory(), "..", ".env");
+if (File.Exists(envPath))
+{
+    DotNetEnv.Env.Load(envPath);
+}
+else
+{
+    // Try current directory
+    DotNetEnv.Env.Load();
+}
+
 var builder = WebApplication.CreateBuilder(args);
+
+// Override configuration with environment variables
+builder.Configuration.AddEnvironmentVariables();
 
 // Add services to the container
 builder.Services.AddControllers();
@@ -46,10 +62,33 @@ builder.Services.AddSwaggerGen(options =>
 });
 
 // Database configuration
+var connectionString = Environment.GetEnvironmentVariable("SUPABASE_CONNECTION_STRING") 
+    ?? builder.Configuration.GetConnectionString("SupabaseConnection");
+
+// Debug output (remove in production)
+Console.WriteLine($"Full connection string: {connectionString}");
+if (!string.IsNullOrEmpty(connectionString))
+{
+    var passwordMatch = System.Text.RegularExpressions.Regex.Match(connectionString, @"Password=([^;]+)");
+    if (passwordMatch.Success)
+    {
+        var password = passwordMatch.Groups[1].Value;
+        Console.WriteLine($"Database password loaded: {password.Substring(0, Math.Min(4, password.Length))}... ({password.Length} chars)");
+    }
+    var portMatch = System.Text.RegularExpressions.Regex.Match(connectionString, @"Port=(\d+)");
+    if (portMatch.Success)
+    {
+        Console.WriteLine($"Database port: {portMatch.Groups[1].Value}");
+    }
+}
+
 builder.Services.AddDbContext<PetCareDbContext>(options =>
     options.UseNpgsql(
-        builder.Configuration.GetConnectionString("SupabaseConnection"),
-        b => b.MigrationsAssembly("PetCare.Infrastructure")
+        connectionString,
+        b => {
+            b.MigrationsAssembly("PetCare.Infrastructure");
+            b.CommandTimeout(120); // 120 seconds timeout
+        }
     ));
 
 // AutoMapper configuration
@@ -71,10 +110,43 @@ builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IPetService, PetService>();
 builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<ICartService, CartService>();
+builder.Services.AddScoped<IOrderService, OrderService>();
 
-builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("Jwt"));
+builder.Services.Configure<JwtSettings>(options =>
+{
+    options.Key = Environment.GetEnvironmentVariable("JWT_KEY") 
+        ?? builder.Configuration["Jwt:Key"] 
+        ?? throw new InvalidOperationException("JWT Key not configured");
+    options.Issuer = Environment.GetEnvironmentVariable("JWT_ISSUER") 
+        ?? builder.Configuration["Jwt:Issuer"] 
+        ?? "PetCare.API";
+    options.Audience = Environment.GetEnvironmentVariable("JWT_AUDIENCE") 
+        ?? builder.Configuration["Jwt:Audience"] 
+        ?? "PetCare.Client";
+    
+    var expiresMinutes = Environment.GetEnvironmentVariable("JWT_EXPIRES_MINUTES");
+    options.ExpiresInMinutes = !string.IsNullOrEmpty(expiresMinutes) 
+        ? int.Parse(expiresMinutes) 
+        : builder.Configuration.GetValue<int>("Jwt:ExpiresInMinutes", 60);
+});
 
-var jwtSettings = builder.Configuration.GetSection("Jwt").Get<JwtSettings>() ?? new JwtSettings();
+var jwtKey = Environment.GetEnvironmentVariable("JWT_KEY") 
+    ?? builder.Configuration["Jwt:Key"] 
+    ?? throw new InvalidOperationException("JWT Key not configured");
+
+if (string.IsNullOrEmpty(jwtKey))
+{
+    throw new InvalidOperationException("JWT Key is empty. Please check your .env file.");
+}
+
+Console.WriteLine($"JWT Key loaded: {jwtKey.Length} characters");
+
+var jwtIssuer = Environment.GetEnvironmentVariable("JWT_ISSUER") 
+    ?? builder.Configuration["Jwt:Issuer"];
+
+var jwtAudience = Environment.GetEnvironmentVariable("JWT_AUDIENCE") 
+    ?? builder.Configuration["Jwt:Audience"];
 
 builder.Services.AddAuthentication(options =>
     {
@@ -89,9 +161,9 @@ builder.Services.AddAuthentication(options =>
             ValidateAudience = true,
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
-            ValidIssuer = jwtSettings.Issuer,
-            ValidAudience = jwtSettings.Audience,
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings.Key))
+            ValidIssuer = jwtIssuer,
+            ValidAudience = jwtAudience,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
         };
     });
 
