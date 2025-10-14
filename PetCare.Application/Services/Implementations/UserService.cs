@@ -271,15 +271,15 @@ public class UserService : IUserService
                 return ServiceResult<UserDto>.FailureResult("User not found");
             }
 
-            // Update only allowed fields
+            // Update only allowed fields (AvatarUrl is NOT included - use UploadAvatarAsync for that)
             if (!string.IsNullOrEmpty(updateProfileDto.FullName))
                 user.FullName = updateProfileDto.FullName;
             
             if (!string.IsNullOrEmpty(updateProfileDto.Phone))
                 user.Phone = updateProfileDto.Phone;
             
-            if (updateProfileDto.AvatarUrl != null) // Allow empty string to clear avatar
-                user.AvatarUrl = updateProfileDto.AvatarUrl;
+            // NOTE: AvatarUrl is intentionally NOT updated here
+            // Use POST /api/profile/avatar endpoint to update avatar
             
             if (!string.IsNullOrEmpty(updateProfileDto.Address))
                 user.Address = updateProfileDto.Address;

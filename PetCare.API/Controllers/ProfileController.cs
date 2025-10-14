@@ -107,10 +107,11 @@ public class ProfileController : ControllerBase
     /// <returns>Updated profile with new avatar URL</returns>
     [HttpPost("avatar")]
     [RequestSizeLimit(5 * 1024 * 1024)] // 5MB limit
+    [Consumes("multipart/form-data")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> UploadAvatar([FromForm] IFormFile file)
+    public async Task<IActionResult> UploadAvatar(IFormFile file)
     {
         if (file == null || file.Length == 0)
         {
@@ -173,12 +174,13 @@ public class ProfileController : ControllerBase
     /// <returns>Image URL with optimized versions</returns>
     [HttpPost("upload-image")]
     [RequestSizeLimit(5 * 1024 * 1024)] // 5MB limit
+    [Consumes("multipart/form-data")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> UploadImage(
-        [FromForm] IFormFile file,
-        [FromForm] string folder = "users/temp")
+        IFormFile file,
+        string folder = "users/temp")
     {
         if (file == null || file.Length == 0)
         {
