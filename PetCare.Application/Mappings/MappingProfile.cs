@@ -25,6 +25,8 @@ public class MappingProfile : Profile
             .ForMember(dest => dest.SpeciesName, opt => opt.MapFrom(src => src.Species != null ? src.Species.SpeciesName : null))
             .ForMember(dest => dest.BreedName, opt => opt.MapFrom(src => src.Breed != null ? src.Breed.BreedName : null));
         CreateMap<CreatePetDto, Pet>();
+        CreateMap<UpdatePetDto, Pet>()
+            .ForAllMembers(opts => opts.Condition((src, dest, srcMember) => srcMember != null));
 
         // Product mappings
         CreateMap<Product, ProductDto>()

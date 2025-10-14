@@ -113,6 +113,31 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ICartService, CartService>();
 builder.Services.AddScoped<IOrderService, OrderService>();
 
+// Image upload service - Switch between Cloudinary and Local storage
+var useCloudinary = Environment.GetEnvironmentVariable("USE_CLOUDINARY") == "true" 
+    || builder.Configuration.GetValue<bool>("UseCloudinary", false);
+
+if (useCloudinary)
+{
+    builder.Services.AddScoped<IImageUploadService, CloudinaryImageUploadService>();
+    Console.WriteLine("Using Cloudinary for image uploads");
+}
+else
+{
+    builder.Services.AddScoped<IImageUploadService, LocalImageUploadService>();
+    Console.WriteLine("Using Local storage for image uploads");
+}
+
+// Configure Image Upload Settings
+builder.Services.Configure<ImageUploadSettings>(options =>
+{
+    options.StorageType = "Local";
+    options.MaxFileSizeBytes = 5 * 1024 * 1024; // 5MB
+    options.AllowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".gif", ".webp" };
+    options.LocalStoragePath = "wwwroot/uploads";
+    options.BaseUrl = "/uploads";
+});
+
 builder.Services.Configure<JwtSettings>(options =>
 {
     options.Key = Environment.GetEnvironmentVariable("JWT_KEY") 
@@ -193,6 +218,9 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+
+// Enable serving static files from wwwroot
+app.UseStaticFiles();
 
 app.UseHttpsRedirection();
 app.UseCors("AllowAll");

@@ -1,0 +1,4 @@
+# This directory stores uploaded images
+# Images are stored locally and not committed to git
+*
+!.gitignore

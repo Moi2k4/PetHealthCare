@@ -5,6 +5,7 @@ namespace PetCare.Application.Services.Interfaces;
 
 public interface IUserService
 {
+    // Admin operations
     Task<ServiceResult<UserDto>> GetUserByIdAsync(Guid userId);
     Task<ServiceResult<UserDto>> GetUserByEmailAsync(string email);
     Task<ServiceResult<PagedResult<UserDto>>> GetUsersAsync(int page, int pageSize);
@@ -13,4 +14,10 @@ public interface IUserService
     Task<ServiceResult<UserDto>> SetUserRoleAsync(Guid userId, SetUserRoleDto setUserRoleDto);
     Task<ServiceResult<bool>> DeleteUserAsync(Guid userId);
     Task<ServiceResult<IEnumerable<UserDto>>> GetUsersByRoleAsync(string roleName);
+
+    // User profile operations
+    Task<ServiceResult<UserDto>> GetMyProfileAsync(Guid userId);
+    Task<ServiceResult<UserDto>> UpdateMyProfileAsync(Guid userId, UpdateProfileDto updateProfileDto);
+    Task<ServiceResult<bool>> ChangePasswordAsync(Guid userId, ChangePasswordDto changePasswordDto);
+    Task<ServiceResult<bool>> UploadAvatarAsync(Guid userId, string avatarUrl);
 }

@@ -1,11 +1,14 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PetCare.Application.Services.Interfaces;
 using PetCare.Application.DTOs.Pet;
+using System.Security.Claims;
 
 namespace PetCare.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class PetsController : ControllerBase
 {
     private readonly IPetService _petService;
@@ -16,96 +19,146 @@ public class PetsController : ControllerBase
     }
 
     /// <summary>
-    /// Get pet by ID
+    /// Get all pets for the authenticated user
     /// </summary>
-    [HttpGet("{id}")]
-    public async Task<IActionResult> GetById(Guid id)
+    [HttpGet("my-pets")]
+    public async Task<IActionResult> GetMyPets()
     {
-        var result = await _petService.GetPetByIdAsync(id);
-        
-        if (!result.Success)
-        {
-            return NotFound(result);
-        }
-        
-        return Ok(result);
-    }
-
-    /// <summary>
-    /// Get pets by user ID
-    /// </summary>
-    [HttpGet("user/{userId}")]
-    public async Task<IActionResult> GetByUserId(Guid userId)
-    {
+        var userId = GetUserId();
         var result = await _petService.GetPetsByUserIdAsync(userId);
-        return Ok(result);
-    }
 
-    /// <summary>
-    /// Get active pets by user ID
-    /// </summary>
-    [HttpGet("user/{userId}/active")]
-    public async Task<IActionResult> GetActivePets(Guid userId)
-    {
-        var result = await _petService.GetActivePetsAsync(userId);
-        return Ok(result);
-    }
-
-    /// <summary>
-    /// Create new pet
-    /// </summary>
-    [HttpPost]
-    public async Task<IActionResult> Create([FromBody] CreatePetDto createPetDto)
-    {
-        if (!ModelState.IsValid)
-        {
-            return BadRequest(ModelState);
-        }
-
-        var result = await _petService.CreatePetAsync(createPetDto);
-        
         if (!result.Success)
         {
             return BadRequest(result);
         }
-        
-        return CreatedAtAction(nameof(GetById), new { id = result.Data!.Id }, result);
+
+        return Ok(result);
     }
 
     /// <summary>
-    /// Update pet
+    /// Get active pets for the authenticated user
     /// </summary>
-    [HttpPut("{id}")]
-    public async Task<IActionResult> Update(Guid id, [FromBody] CreatePetDto updatePetDto)
+    [HttpGet("my-pets/active")]
+    public async Task<IActionResult> GetMyActivePets()
+    {
+        var userId = GetUserId();
+        var result = await _petService.GetActivePetsAsync(userId);
+
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Get paginated pets for the authenticated user
+    /// </summary>
+    [HttpGet("my-pets/paged")]
+    public async Task<IActionResult> GetMyPetsPaged([FromQuery] int page = 1, [FromQuery] int pageSize = 10)
+    {
+        if (page < 1 || pageSize < 1 || pageSize > 100)
+        {
+            return BadRequest(new { success = false, message = "Invalid pagination parameters" });
+        }
+
+        var userId = GetUserId();
+        var result = await _petService.GetPagedPetsAsync(userId, page, pageSize);
+
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Get a specific pet by ID (must belong to authenticated user)
+    /// </summary>
+    [HttpGet("{petId}")]
+    public async Task<IActionResult> GetPetById(Guid petId)
+    {
+        var userId = GetUserId();
+        var result = await _petService.GetPetByIdAsync(petId, userId);
+
+        if (!result.Success)
+        {
+            return NotFound(result);
+        }
+
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Create a new pet for the authenticated user
+    /// </summary>
+    [HttpPost]
+    public async Task<IActionResult> CreatePet([FromBody] CreatePetDto createPetDto)
     {
         if (!ModelState.IsValid)
         {
             return BadRequest(ModelState);
         }
 
-        var result = await _petService.UpdatePetAsync(id, updatePetDto);
-        
+        var userId = GetUserId();
+        var result = await _petService.CreatePetAsync(createPetDto, userId);
+
         if (!result.Success)
         {
-            return NotFound(result);
+            return BadRequest(result);
         }
-        
+
+        return CreatedAtAction(nameof(GetPetById), new { petId = result.Data!.Id }, result);
+    }
+
+    /// <summary>
+    /// Update an existing pet (must belong to authenticated user)
+    /// </summary>
+    [HttpPut("{petId}")]
+    public async Task<IActionResult> UpdatePet(Guid petId, [FromBody] UpdatePetDto updatePetDto)
+    {
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(ModelState);
+        }
+
+        var userId = GetUserId();
+        var result = await _petService.UpdatePetAsync(petId, updatePetDto, userId);
+
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+
         return Ok(result);
     }
 
     /// <summary>
-    /// Delete pet
+    /// Delete (soft delete) a pet (must belong to authenticated user)
     /// </summary>
-    [HttpDelete("{id}")]
-    public async Task<IActionResult> Delete(Guid id)
+    [HttpDelete("{petId}")]
+    public async Task<IActionResult> DeletePet(Guid petId)
     {
-        var result = await _petService.DeletePetAsync(id);
-        
+        var userId = GetUserId();
+        var result = await _petService.DeletePetAsync(petId, userId);
+
         if (!result.Success)
         {
-            return NotFound(result);
+            return BadRequest(result);
         }
-        
+
         return Ok(result);
+    }
+
+    private Guid GetUserId()
+    {
+        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var userId))
+        {
+            throw new UnauthorizedAccessException("Invalid user ID in token");
+        }
+        return userId;
     }
 }

@@ -238,4 +238,125 @@ public class UserService : IUserService
             return ServiceResult<IEnumerable<UserDto>>.FailureResult($"Error retrieving users by role: {ex.Message}");
         }
     }
+
+    // User profile operations
+    public async Task<ServiceResult<UserDto>> GetMyProfileAsync(Guid userId)
+    {
+        try
+        {
+            var user = await _unitOfWork.Users.GetUserWithRoleAsync(userId);
+            
+            if (user == null)
+            {
+                return ServiceResult<UserDto>.FailureResult("User not found");
+            }
+
+            var userDto = _mapper.Map<UserDto>(user);
+            return ServiceResult<UserDto>.SuccessResult(userDto);
+        }
+        catch (Exception ex)
+        {
+            return ServiceResult<UserDto>.FailureResult($"Error retrieving profile: {ex.Message}");
+        }
+    }
+
+    public async Task<ServiceResult<UserDto>> UpdateMyProfileAsync(Guid userId, UpdateProfileDto updateProfileDto)
+    {
+        try
+        {
+            var user = await _unitOfWork.Users.GetByIdAsync(userId);
+            
+            if (user == null)
+            {
+                return ServiceResult<UserDto>.FailureResult("User not found");
+            }
+
+            // Update only allowed fields
+            if (!string.IsNullOrEmpty(updateProfileDto.FullName))
+                user.FullName = updateProfileDto.FullName;
+            
+            if (!string.IsNullOrEmpty(updateProfileDto.Phone))
+                user.Phone = updateProfileDto.Phone;
+            
+            if (updateProfileDto.AvatarUrl != null) // Allow empty string to clear avatar
+                user.AvatarUrl = updateProfileDto.AvatarUrl;
+            
+            if (!string.IsNullOrEmpty(updateProfileDto.Address))
+                user.Address = updateProfileDto.Address;
+            
+            if (!string.IsNullOrEmpty(updateProfileDto.City))
+                user.City = updateProfileDto.City;
+            
+            if (!string.IsNullOrEmpty(updateProfileDto.District))
+                user.District = updateProfileDto.District;
+
+            await _unitOfWork.Users.UpdateAsync(user);
+            await _unitOfWork.SaveChangesAsync();
+
+            // Reload with role information
+            user = await _unitOfWork.Users.GetUserWithRoleAsync(userId);
+            var userDto = _mapper.Map<UserDto>(user);
+            
+            return ServiceResult<UserDto>.SuccessResult(userDto);
+        }
+        catch (Exception ex)
+        {
+            return ServiceResult<UserDto>.FailureResult($"Error updating profile: {ex.Message}");
+        }
+    }
+
+    public async Task<ServiceResult<bool>> ChangePasswordAsync(Guid userId, ChangePasswordDto changePasswordDto)
+    {
+        try
+        {
+            var user = await _unitOfWork.Users.GetByIdAsync(userId);
+            
+            if (user == null)
+            {
+                return ServiceResult<bool>.FailureResult("User not found");
+            }
+
+            // Verify current password
+            if (!BCryptNet.Verify(changePasswordDto.CurrentPassword, user.PasswordHash))
+            {
+                return ServiceResult<bool>.FailureResult("Current password is incorrect");
+            }
+
+            // Hash and update new password
+            user.PasswordHash = BCryptNet.HashPassword(changePasswordDto.NewPassword);
+            
+            await _unitOfWork.Users.UpdateAsync(user);
+            await _unitOfWork.SaveChangesAsync();
+            
+            return ServiceResult<bool>.SuccessResult(true, "Password changed successfully");
+        }
+        catch (Exception ex)
+        {
+            return ServiceResult<bool>.FailureResult($"Error changing password: {ex.Message}");
+        }
+    }
+
+    public async Task<ServiceResult<bool>> UploadAvatarAsync(Guid userId, string avatarUrl)
+    {
+        try
+        {
+            var user = await _unitOfWork.Users.GetByIdAsync(userId);
+            
+            if (user == null)
+            {
+                return ServiceResult<bool>.FailureResult("User not found");
+            }
+
+            user.AvatarUrl = avatarUrl;
+            
+            await _unitOfWork.Users.UpdateAsync(user);
+            await _unitOfWork.SaveChangesAsync();
+            
+            return ServiceResult<bool>.SuccessResult(true, "Avatar uploaded successfully");
+        }
+        catch (Exception ex)
+        {
+            return ServiceResult<bool>.FailureResult($"Error uploading avatar: {ex.Message}");
+        }
+    }
 }
