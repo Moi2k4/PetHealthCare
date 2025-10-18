@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using PetCare.Domain.Entities;
+using PetCare.Infrastructure.Services.PetFinder;
 
 namespace PetCare.Infrastructure.Data;
 
@@ -29,39 +30,17 @@ public static class DbInitializer
             await context.Roles.AddRangeAsync(roles);
             await context.SaveChangesAsync();
 
-            // Seed Pet Species
-            var species = new List<PetSpecies>
-            {
-                new PetSpecies { SpeciesName = "Chó", Description = "Chó cảnh và chó làm việc" },
-                new PetSpecies { SpeciesName = "Mèo", Description = "Mèo cảnh các loại" },
-                new PetSpecies { SpeciesName = "Thỏ", Description = "Thỏ cảnh" },
-                new PetSpecies { SpeciesName = "Hamster", Description = "Chuột Hamster" },
-                new PetSpecies { SpeciesName = "Chim", Description = "Chim cảnh các loại" },
-                new PetSpecies { SpeciesName = "Cá", Description = "Cá cảnh" }
-            };
+            // Seed Pet Species using comprehensive data
+            var species = PetSpeciesSeedData.GetSpecies();
             await context.PetSpecies.AddRangeAsync(species);
             await context.SaveChangesAsync();
+            Console.WriteLine($"✓ Seeded {species.Count} pet species");
 
-            // Seed Pet Breeds (for Dogs and Cats)
-            var dogSpecies = species.First(s => s.SpeciesName == "Chó");
-            var catSpecies = species.First(s => s.SpeciesName == "Mèo");
-
-            var breeds = new List<PetBreed>
-            {
-                // Dog Breeds
-                new PetBreed { SpeciesId = dogSpecies.Id, BreedName = "Golden Retriever", Characteristics = "Thân thiện, thông minh" },
-                new PetBreed { SpeciesId = dogSpecies.Id, BreedName = "Poodle", Characteristics = "Thông minh, dễ huấn luyện" },
-                new PetBreed { SpeciesId = dogSpecies.Id, BreedName = "Corgi", Characteristics = "Năng động, trung thành" },
-                new PetBreed { SpeciesId = dogSpecies.Id, BreedName = "Shiba Inu", Characteristics = "Độc lập, trung thành" },
-                
-                // Cat Breeds
-                new PetBreed { SpeciesId = catSpecies.Id, BreedName = "British Shorthair", Characteristics = "Điềm tĩnh, dễ gần" },
-                new PetBreed { SpeciesId = catSpecies.Id, BreedName = "Scottish Fold", Characteristics = "Hiền lành, yêu cầu vuốt ve" },
-                new PetBreed { SpeciesId = catSpecies.Id, BreedName = "Persian", Characteristics = "Lông dài, cần chăm sóc nhiều" },
-                new PetBreed { SpeciesId = catSpecies.Id, BreedName = "Munchkin", Characteristics = "Chân ngắn, năng động" }
-            };
+            // Seed Pet Breeds (comprehensive list from seed data)
+            var breeds = PetSpeciesSeedData.GetAllBreeds();
             await context.PetBreeds.AddRangeAsync(breeds);
             await context.SaveChangesAsync();
+            Console.WriteLine($"✓ Seeded {breeds.Count} pet breeds");
 
             // Seed Service Categories
             var serviceCategories = new List<ServiceCategory>
@@ -191,6 +170,110 @@ public static class DbInitializer
         {
             Console.WriteLine($"Error seeding database: {ex.Message}");
             throw;
+        }
+    }
+
+    /// <summary>
+    /// Seed pet species and breeds from PetFinder API
+    /// Maps Vietnamese species names to English PetFinder types
+    /// </summary>
+    public static async Task SeedFromPetFinderAsync(PetCareDbContext context, HttpClient httpClient, Microsoft.Extensions.Configuration.IConfiguration configuration)
+    {
+        try
+        {
+            Console.WriteLine("=== Fetching data from PetFinder API ===");
+            
+            // Check if breeds already exist
+            if (await context.PetBreeds.AnyAsync())
+            {
+                Console.WriteLine("Pet breeds already exist. Skipping PetFinder import.");
+                return;
+            }
+
+            // Get existing species from database (Vietnamese names)
+            var existingSpecies = await context.PetSpecies.ToListAsync();
+            
+            if (!existingSpecies.Any())
+            {
+                Console.WriteLine("No species found. Please run normal seeder first.");
+                return;
+            }
+
+            // Mapping Vietnamese to English species names for PetFinder API
+            var speciesMapping = new Dictionary<string, string>
+            {
+                { "Chó", "Dog" },
+                { "Mèo", "Cat" },
+                { "Chim", "Bird" },
+                { "Thỏ", "Rabbit" },
+                { "Hamster", "Small & Furry" },
+                { "Cá", "Scales, Fins & Other" }
+            };
+
+            var petFinderService = new PetFinderService(httpClient, configuration);
+            var allBreeds = new List<PetBreed>();
+
+            foreach (var species in existingSpecies)
+            {
+                if (speciesMapping.TryGetValue(species.SpeciesName, out var englishName))
+                {
+                    Console.WriteLine($"Fetching breeds for {species.SpeciesName} ({englishName})...");
+                    
+                    try
+                    {
+                        var breeds = await petFinderService.GetBreedsAsync(englishName, species.Id);
+                        allBreeds.AddRange(breeds);
+                        Console.WriteLine($"  ✓ Found {breeds.Count} breeds for {species.SpeciesName}");
+                        
+                        // Rate limiting - be nice to the API
+                        await Task.Delay(500);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"  ✗ Error fetching breeds for {species.SpeciesName}: {ex.Message}");
+                    }
+                }
+            }
+
+            if (allBreeds.Any())
+            {
+                await context.PetBreeds.AddRangeAsync(allBreeds);
+                await context.SaveChangesAsync();
+                Console.WriteLine($"✓ Imported {allBreeds.Count} breeds from PetFinder");
+            }
+            else
+            {
+                Console.WriteLine("⚠ No breeds were fetched. Using fallback data...");
+                // Fallback to local data
+                var fallbackBreeds = PetSpeciesSeedData.GetAllBreeds();
+                
+                // Update species IDs to match existing Vietnamese species
+                foreach (var breed in fallbackBreeds)
+                {
+                    var vietnameseSpecies = existingSpecies.FirstOrDefault(s => 
+                        (breed.SpeciesId.ToString().StartsWith("11111111") && s.SpeciesName == "Chó") ||
+                        (breed.SpeciesId.ToString().StartsWith("22222222") && s.SpeciesName == "Mèo") ||
+                        (breed.SpeciesId.ToString().StartsWith("33333333") && s.SpeciesName == "Chim") ||
+                        (breed.SpeciesId.ToString().StartsWith("44444444") && s.SpeciesName == "Thỏ")
+                    );
+                    
+                    if (vietnameseSpecies != null)
+                    {
+                        breed.SpeciesId = vietnameseSpecies.Id;
+                    }
+                }
+                
+                await context.PetBreeds.AddRangeAsync(fallbackBreeds);
+                await context.SaveChangesAsync();
+                Console.WriteLine($"✓ Used local seed data: {fallbackBreeds.Count} breeds");
+            }
+
+            Console.WriteLine("=== PetFinder import completed ===");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error importing from PetFinder: {ex.Message}");
+            Console.WriteLine($"Stack trace: {ex.StackTrace}");
         }
     }
 }

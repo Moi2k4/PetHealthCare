@@ -28,6 +28,13 @@ public class MappingProfile : Profile
         CreateMap<UpdatePetDto, Pet>()
             .ForAllMembers(opts => opts.Condition((src, dest, srcMember) => srcMember != null));
 
+        // Pet Species and Breed mappings
+        CreateMap<PetSpecies, PetSpeciesDto>();
+        CreateMap<PetBreed, PetBreedDto>()
+            .ForMember(dest => dest.SpeciesName, opt => opt.MapFrom(src => src.Species != null ? src.Species.SpeciesName : null));
+        CreateMap<PetSpecies, SpeciesWithBreedsDto>()
+            .ForMember(dest => dest.Breeds, opt => opt.MapFrom(src => src.Breeds));
+
         // Product mappings
         CreateMap<Product, ProductDto>()
             .ForMember(dest => dest.CategoryName, opt => opt.MapFrom(src => src.Category != null ? src.Category.CategoryName : null))

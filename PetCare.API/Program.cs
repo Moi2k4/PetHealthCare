@@ -205,12 +205,20 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-// Seed database (optional - uncomment to seed on startup)
-// using (var scope = app.Services.CreateScope())
-// {
-//     var context = scope.ServiceProvider.GetRequiredService<PetCareDbContext>();
-//     await DbInitializer.SeedAsync(context);
-// }
+// Seed database on startup (comment out after first successful run)
+// Uncomment only when you need to re-seed the database
+/*
+using (var scope = app.Services.CreateScope())
+{
+    var context = scope.ServiceProvider.GetRequiredService<PetCareDbContext>();
+    await DbInitializer.SeedAsync(context);
+    
+    // Seed from PetFinder API (only needed once)
+    var httpClient = new HttpClient();
+    var configuration = scope.ServiceProvider.GetRequiredService<IConfiguration>();
+    await DbInitializer.SeedFromPetFinderAsync(context, httpClient, configuration);
+}
+*/
 
 // Configure the HTTP request pipeline
 if (app.Environment.IsDevelopment())
