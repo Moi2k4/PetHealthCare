@@ -59,6 +59,11 @@ public class PetCareDbContext : DbContext
     public DbSet<ServiceReview> ServiceReviews { get; set; }
     public DbSet<Notification> Notifications { get; set; }
 
+    // Subscriptions & AI
+    public DbSet<SubscriptionPackage> SubscriptionPackages { get; set; }
+    public DbSet<UserSubscription> UserSubscriptions { get; set; }
+    public DbSet<AIHealthAnalysis> AIHealthAnalyses { get; set; }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -74,6 +79,7 @@ public class PetCareDbContext : DbContext
         ConfigureBlogEntities(modelBuilder);
         ConfigureChatEntities(modelBuilder);
         ConfigureReviewEntities(modelBuilder);
+        ConfigureSubscriptionEntities(modelBuilder);
     }
 
     private void ConfigureUserEntities(ModelBuilder modelBuilder)
@@ -905,6 +911,104 @@ public class PetCareDbContext : DbContext
 
             entity.HasIndex(e => e.UserId);
             entity.HasIndex(e => new { e.UserId, e.IsRead }).HasFilter("is_read = false");
+        });
+    }
+
+    private void ConfigureSubscriptionEntities(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<SubscriptionPackage>(entity =>
+        {
+            entity.ToTable("subscription_packages");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.Name).HasColumnName("name").IsRequired().HasMaxLength(100);
+            entity.Property(e => e.Description).HasColumnName("description").IsRequired();
+            entity.Property(e => e.Price).HasColumnName("price").HasPrecision(10, 2);
+            entity.Property(e => e.BillingCycle).HasColumnName("billing_cycle").IsRequired().HasMaxLength(20);
+            entity.Property(e => e.IsActive).HasColumnName("is_active");
+            entity.Property(e => e.HasAIHealthTracking).HasColumnName("has_ai_health_tracking");
+            entity.Property(e => e.HasVaccinationTracking).HasColumnName("has_vaccination_tracking");
+            entity.Property(e => e.HasHealthReminders).HasColumnName("has_health_reminders");
+            entity.Property(e => e.HasAIRecommendations).HasColumnName("has_ai_recommendations");
+            entity.Property(e => e.HasNutritionalAnalysis).HasColumnName("has_nutritional_analysis");
+            entity.Property(e => e.HasEarlyDiseaseDetection).HasColumnName("has_early_disease_detection");
+            entity.Property(e => e.HasPrioritySupport).HasColumnName("has_priority_support");
+            entity.Property(e => e.MaxPets).HasColumnName("max_pets");
+            entity.Property(e => e.Features).HasColumnName("features");
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+            entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+        });
+
+        modelBuilder.Entity<UserSubscription>(entity =>
+        {
+            entity.ToTable("user_subscriptions");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.UserId).HasColumnName("user_id");
+            entity.Property(e => e.SubscriptionPackageId).HasColumnName("subscription_package_id");
+            entity.Property(e => e.StartDate).HasColumnName("start_date");
+            entity.Property(e => e.EndDate).HasColumnName("end_date");
+            entity.Property(e => e.IsActive).HasColumnName("is_active");
+            entity.Property(e => e.Status).HasColumnName("status").IsRequired().HasMaxLength(20);
+            entity.Property(e => e.NextBillingDate).HasColumnName("next_billing_date");
+            entity.Property(e => e.AmountPaid).HasColumnName("amount_paid").HasPrecision(10, 2);
+            entity.Property(e => e.PaymentMethod).HasColumnName("payment_method").HasMaxLength(50);
+            entity.Property(e => e.TransactionId).HasColumnName("transaction_id").HasMaxLength(100);
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+            entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+
+            entity.HasOne(e => e.User)
+                .WithMany(u => u.UserSubscriptions)
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.SubscriptionPackage)
+                .WithMany(sp => sp.UserSubscriptions)
+                .HasForeignKey(e => e.SubscriptionPackageId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(e => e.UserId);
+            entity.HasIndex(e => new { e.UserId, e.IsActive });
+        });
+
+        modelBuilder.Entity<AIHealthAnalysis>(entity =>
+        {
+            entity.ToTable("ai_health_analyses");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.PetId).HasColumnName("pet_id");
+            entity.Property(e => e.UserId).HasColumnName("user_id");
+            entity.Property(e => e.AnalysisType).HasColumnName("analysis_type").IsRequired().HasMaxLength(50);
+            entity.Property(e => e.InputData).HasColumnName("input_data").IsRequired();
+            entity.Property(e => e.AIResponse).HasColumnName("ai_response").IsRequired();
+            entity.Property(e => e.Recommendations).HasColumnName("recommendations");
+            entity.Property(e => e.ConfidenceScore).HasColumnName("confidence_score").HasPrecision(5, 2);
+            entity.Property(e => e.TokensUsed).HasColumnName("tokens_used");
+            entity.Property(e => e.AIModel).HasColumnName("ai_model").HasMaxLength(50);
+            entity.Property(e => e.IsReviewed).HasColumnName("is_reviewed");
+            entity.Property(e => e.ReviewedBy).HasColumnName("reviewed_by");
+            entity.Property(e => e.ReviewedAt).HasColumnName("reviewed_at");
+            entity.Property(e => e.ReviewNotes).HasColumnName("review_notes");
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+
+            entity.HasOne(e => e.Pet)
+                .WithMany(p => p.AIHealthAnalyses)
+                .HasForeignKey(e => e.PetId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.User)
+                .WithMany(u => u.AIHealthAnalyses)
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.Reviewer)
+                .WithMany()
+                .HasForeignKey(e => e.ReviewedBy)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(e => e.PetId);
+            entity.HasIndex(e => e.UserId);
+            entity.HasIndex(e => new { e.PetId, e.AnalysisType });
         });
     }
 

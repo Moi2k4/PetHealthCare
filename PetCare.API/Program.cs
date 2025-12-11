@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using PetCare.Application.Common;
+using PetCare.Application.Services;
 using PetCare.Infrastructure.Data;
 using PetCare.Infrastructure.Repositories.Interfaces;
 using PetCare.Infrastructure.Repositories.Implementations;
@@ -112,6 +113,18 @@ builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ICartService, CartService>();
 builder.Services.AddScoped<IOrderService, OrderService>();
+builder.Services.AddScoped<IAppointmentService, AppointmentService>();
+builder.Services.AddScoped<IBlogService, BlogService>();
+builder.Services.AddScoped<IAIHealthService, AIHealthService>();
+builder.Services.AddScoped<IProductCategoryService, ProductCategoryService>();
+builder.Services.AddScoped<IServiceManagementService, ServiceManagementService>();
+builder.Services.AddScoped<ISubscriptionService, SubscriptionService>();
+builder.Services.AddScoped<INotificationService, NotificationService>();
+builder.Services.AddScoped<IReviewService, ReviewService>();
+builder.Services.AddScoped<IHealthTrackingService, HealthTrackingService>();
+
+// Add HttpClient for AI services
+builder.Services.AddHttpClient();
 
 // Image upload service - Switch between Cloudinary and Local storage
 var useCloudinary = Environment.GetEnvironmentVariable("USE_CLOUDINARY") == "true" 

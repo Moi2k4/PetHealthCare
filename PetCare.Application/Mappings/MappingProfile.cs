@@ -5,6 +5,12 @@ using PetCare.Application.DTOs.Product;
 using PetCare.Application.DTOs.Order;
 using PetCare.Application.DTOs.Appointment;
 using PetCare.Application.DTOs.Blog;
+using PetCare.Application.DTOs.Category;
+using PetCare.Application.DTOs.Service;
+using PetCare.Application.DTOs.Subscription;
+using PetCare.Application.DTOs.Notification;
+using PetCare.Application.DTOs.Review;
+using PetCare.Application.DTOs.Health;
 using PetCare.Domain.Entities;
 
 namespace PetCare.Application.Mappings;
@@ -57,5 +63,39 @@ public class MappingProfile : Profile
             .ForMember(dest => dest.AuthorName, opt => opt.MapFrom(src => src.Author != null ? src.Author.FullName : null))
             .ForMember(dest => dest.CategoryName, opt => opt.MapFrom(src => src.Category != null ? src.Category.CategoryName : null))
             .ForMember(dest => dest.Tags, opt => opt.MapFrom(src => src.BlogPostTags.Select(pt => pt.Tag.TagName).ToList()));
+
+        // Product Category mappings
+        CreateMap<ProductCategory, ProductCategoryDto>();
+
+        // Service mappings
+        CreateMap<Service, ServiceDto>()
+            .ForMember(dest => dest.CategoryName, opt => opt.MapFrom(src => src.Category != null ? src.Category.CategoryName : null));
+        CreateMap<ServiceCategory, ServiceCategoryDto>()
+            .ForMember(dest => dest.ServiceCount, opt => opt.MapFrom(src => src.Services.Count));
+
+        // Subscription mappings
+        CreateMap<SubscriptionPackage, SubscriptionPackageDto>();
+        CreateMap<UserSubscription, UserSubscriptionDto>()
+            .ForMember(dest => dest.PackageName, opt => opt.MapFrom(src => src.SubscriptionPackage.Name));
+
+        // Notification mappings
+        CreateMap<Notification, NotificationDto>();
+
+        // Review mappings
+        CreateMap<ProductReview, ProductReviewDto>()
+            .ForMember(dest => dest.UserName, opt => opt.MapFrom(src => src.User != null ? src.User.FullName : null));
+        CreateMap<ServiceReview, ServiceReviewDto>()
+            .ForMember(dest => dest.UserName, opt => opt.MapFrom(src => src.User != null ? src.User.FullName : null))
+            .ForMember(dest => dest.ServiceName, opt => opt.MapFrom(src => src.Service != null ? src.Service.ServiceName : null));
+
+        // Health tracking mappings
+        CreateMap<HealthRecord, HealthRecordDto>()
+            .ForMember(dest => dest.PetName, opt => opt.MapFrom(src => src.Pet != null ? src.Pet.PetName : null));
+        CreateMap<Vaccination, VaccinationDto>()
+            .ForMember(dest => dest.PetName, opt => opt.MapFrom(src => src.Pet != null ? src.Pet.PetName : null))
+            .ForMember(dest => dest.IsOverdue, opt => opt.MapFrom(src => src.NextDueDate.HasValue && src.NextDueDate.Value < DateTime.UtcNow));
+        CreateMap<HealthReminder, HealthReminderDto>()
+            .ForMember(dest => dest.PetName, opt => opt.MapFrom(src => src.Pet != null ? src.Pet.PetName : null))
+            .ForMember(dest => dest.IsUpcoming, opt => opt.MapFrom(src => !src.IsCompleted && src.ReminderDate >= DateTime.UtcNow && src.ReminderDate <= DateTime.UtcNow.AddDays(7)));
     }
 }

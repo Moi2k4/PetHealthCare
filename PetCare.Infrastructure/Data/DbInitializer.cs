@@ -23,7 +23,7 @@ public static class DbInitializer
             var roles = new List<Role>
             {
                 new Role { RoleName = "admin", Description = "Quản trị viên hệ thống" },
-                new Role { RoleName = "doctor", Description = "Bác sĩ thú y" },
+                new Role { RoleName = "service_provider", Description = "Nhà cung cấp dịch vụ (Grooming, Pet Hotel, etc.)" },
                 new Role { RoleName = "staff", Description = "Nhân viên chăm sóc/grooming" },
                 new Role { RoleName = "user", Description = "Người dùng thông thường" }
             };
@@ -45,26 +45,29 @@ public static class DbInitializer
             // Seed Service Categories
             var serviceCategories = new List<ServiceCategory>
             {
-                new ServiceCategory { CategoryName = "Khám bệnh", Description = "Dịch vụ khám và điều trị bệnh", IconUrl = "/icons/medical.svg" },
                 new ServiceCategory { CategoryName = "Grooming", Description = "Dịch vụ cắt tỉa, tắm rửa", IconUrl = "/icons/grooming.svg" },
                 new ServiceCategory { CategoryName = "Spa & Chăm sóc", Description = "Dịch vụ spa và chăm sóc sắc đẹp", IconUrl = "/icons/spa.svg" },
-                new ServiceCategory { CategoryName = "Tiêm phòng", Description = "Dịch vụ tiêm phòng vắc-xin", IconUrl = "/icons/vaccine.svg" },
-                new ServiceCategory { CategoryName = "Phẫu thuật", Description = "Dịch vụ phẫu thuật thú y", IconUrl = "/icons/surgery.svg" },
-                new ServiceCategory { CategoryName = "Khách sạn thú cưng", Description = "Dịch vụ lưu trú thú cưng", IconUrl = "/icons/hotel.svg" }
+                new ServiceCategory { CategoryName = "Khách sạn thú cưng", Description = "Dịch vụ lưu trú thú cưng", IconUrl = "/icons/hotel.svg" },
+                new ServiceCategory { CategoryName = "Huấn luyện", Description = "Dịch vụ huấn luyện thú cưng", IconUrl = "/icons/training.svg" },
+                new ServiceCategory { CategoryName = "Tư vấn sức khỏe", Description = "Tư vấn và giới thiệu dịch vụ thú y đối tác", IconUrl = "/icons/consultation.svg" },
+                new ServiceCategory { CategoryName = "Dịch vụ tại nhà", Description = "Các dịch vụ chăm sóc tại nhà", IconUrl = "/icons/home-service.svg" }
             };
             await context.ServiceCategories.AddRangeAsync(serviceCategories);
             await context.SaveChangesAsync();
 
             // Seed Services
-            var medicalCategory = serviceCategories.First(sc => sc.CategoryName == "Khám bệnh");
             var groomingCategory = serviceCategories.First(sc => sc.CategoryName == "Grooming");
+            var spaCategory = serviceCategories.First(sc => sc.CategoryName == "Spa & Chăm sóc");
+            var hotelCategory = serviceCategories.First(sc => sc.CategoryName == "Khách sạn thú cưng");
+            var consultationCategory = serviceCategories.First(sc => sc.CategoryName == "Tư vấn sức khỏe");
 
             var services = new List<Service>
             {
-                new Service { CategoryId = medicalCategory.Id, ServiceName = "Khám tổng quát", Description = "Khám sức khỏe tổng quát cho thú cưng", DurationMinutes = 30, Price = 200000, IsActive = true },
-                new Service { CategoryId = medicalCategory.Id, ServiceName = "Khám chuyên sâu", Description = "Khám chuyên sâu với bác sĩ chuyên khoa", DurationMinutes = 60, Price = 500000, IsActive = true },
                 new Service { CategoryId = groomingCategory.Id, ServiceName = "Tắm và cắt tỉa cơ bản", Description = "Dịch vụ tắm, sấy và cắt tỉa lông cơ bản", DurationMinutes = 90, Price = 150000, IsActive = true },
-                new Service { CategoryId = groomingCategory.Id, ServiceName = "Tắm và cắt tỉa cao cấp", Description = "Dịch vụ tắm, spa và cắt tỉa lông chuyên nghiệp", DurationMinutes = 120, Price = 300000, IsActive = true }
+                new Service { CategoryId = groomingCategory.Id, ServiceName = "Tắm và cắt tỉa cao cấp", Description = "Dịch vụ tắm, spa và cắt tỉa lông chuyên nghiệp", DurationMinutes = 120, Price = 300000, IsActive = true },
+                new Service { CategoryId = spaCategory.Id, ServiceName = "Spa thư giãn", Description = "Massage, chăm sóc da lông cao cấp", DurationMinutes = 60, Price = 250000, IsActive = true },
+                new Service { CategoryId = hotelCategory.Id, ServiceName = "Lưu trú thú cưng", Description = "Dịch vụ lưu trú theo ngày", DurationMinutes = 1440, Price = 200000, IsActive = true },
+                new Service { CategoryId = consultationCategory.Id, ServiceName = "Tư vấn sức khỏe", Description = "Tư vấn và giới thiệu bác sĩ thú y uy tín", DurationMinutes = 30, Price = 0, IsActive = true }
             };
             await context.Services.AddRangeAsync(services);
             await context.SaveChangesAsync();
@@ -146,16 +149,16 @@ public static class DbInitializer
             {
                 new FaqItem 
                 { 
-                    Question = "Tôi nên tiêm phòng cho thú cưng khi nào?",
-                    Answer = "Thú cưng nên được tiêm phòng đầy đủ từ 6-8 tuần tuổi. Các mũi tiêm tiếp theo theo lịch của bác sĩ thú y.",
-                    Category = "Sức khỏe",
-                    Keywords = new[] { "tiêm phòng", "vắc-xin", "sức khỏe" },
+                    Question = "PetCare cung cấp những dịch vụ gì?",
+                    Answer = "PetCare là nền tảng kết nối cung cấp dịch vụ grooming, spa, khách sạn thú cưng, huấn luyện và tư vấn sức khỏe. Chúng tôi không cung cấp dịch vụ khám chữa bệnh trực tiếp nhưng có thể giới thiệu các phòng khám thú y uy tín.",
+                    Category = "Dịch vụ",
+                    Keywords = new[] { "dịch vụ", "grooming", "spa", "khách sạn" },
                     IsActive = true
                 },
                 new FaqItem 
                 { 
                     Question = "Tôi nên cho thú cưng ăn gì?",
-                    Answer = "Nên cho thú cưng ăn thức ăn chuyên dụng, cân đối dinh dưỡng theo độ tuổi và giống loài.",
+                    Answer = "Nên cho thú cưng ăn thức ăn chuyên dụng, cân đối dinh dưỡng theo độ tuổi và giống loài. PetCare có bán các sản phẩm thức ăn chất lượng cao từ các thương hiệu uy tín.",
                     Category = "Dinh dưỡng",
                     Keywords = new[] { "thức ăn", "dinh dưỡng", "chế độ ăn" },
                     IsActive = true

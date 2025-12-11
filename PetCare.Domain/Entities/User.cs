@@ -24,4 +24,6 @@ public class User : AuditableEntity
     public virtual ICollection<BlogPost> BlogPosts { get; set; } = new List<BlogPost>();
     public virtual ICollection<ChatSession> ChatSessions { get; set; } = new List<ChatSession>();
     public virtual ICollection<Notification> Notifications { get; set; } = new List<Notification>();
+    public virtual ICollection<UserSubscription> UserSubscriptions { get; set; } = new List<UserSubscription>();
+    public virtual ICollection<AIHealthAnalysis> AIHealthAnalyses { get; set; } = new List<AIHealthAnalysis>();
 }
