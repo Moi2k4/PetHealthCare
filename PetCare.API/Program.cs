@@ -66,21 +66,10 @@ builder.Services.AddSwaggerGen(options =>
 var connectionString = Environment.GetEnvironmentVariable("SUPABASE_CONNECTION_STRING") 
     ?? builder.Configuration.GetConnectionString("SupabaseConnection");
 
-// Debug output (remove in production)
-Console.WriteLine($"Full connection string: {connectionString}");
-if (!string.IsNullOrEmpty(connectionString))
+if (builder.Environment.IsDevelopment())
 {
-    var passwordMatch = System.Text.RegularExpressions.Regex.Match(connectionString, @"Password=([^;]+)");
-    if (passwordMatch.Success)
-    {
-        var password = passwordMatch.Groups[1].Value;
-        Console.WriteLine($"Database password loaded: {password.Substring(0, Math.Min(4, password.Length))}... ({password.Length} chars)");
-    }
-    var portMatch = System.Text.RegularExpressions.Regex.Match(connectionString, @"Port=(\d+)");
-    if (portMatch.Success)
-    {
-        Console.WriteLine($"Database port: {portMatch.Groups[1].Value}");
-    }
+    // Debug output (development only)
+    Console.WriteLine($"Connection string configured: {!string.IsNullOrEmpty(connectionString)}");
 }
 
 builder.Services.AddDbContext<PetCareDbContext>(options =>
@@ -183,7 +172,10 @@ if (string.IsNullOrEmpty(jwtKey))
     throw new InvalidOperationException("JWT Key is empty. Please check your .env file.");
 }
 
-Console.WriteLine($"JWT Key loaded: {jwtKey.Length} characters");
+if (builder.Environment.IsDevelopment())
+{
+    Console.WriteLine($"JWT Key loaded: {jwtKey.Length} characters");
+}
 
 var jwtIssuer = Environment.GetEnvironmentVariable("JWT_ISSUER") 
     ?? builder.Configuration["Jwt:Issuer"];
@@ -210,14 +202,38 @@ builder.Services.AddAuthentication(options =>
         };
     });
 
-// CORS configuration
+// CORS configuration - environment-based for security
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowAll", policy =>
+    var allowedOrigins = Environment.GetEnvironmentVariable("ALLOWED_ORIGINS")
+        ?? builder.Configuration["AllowedOrigins"];
+    
+    options.AddPolicy("AppCorsPolicy", policy =>
     {
-        policy.AllowAnyOrigin()
-              .AllowAnyMethod()
-              .AllowAnyHeader();
+        if (string.IsNullOrEmpty(allowedOrigins) || allowedOrigins == "*")
+        {
+            // Development fallback - allow all
+            if (builder.Environment.IsDevelopment())
+            {
+                policy.AllowAnyOrigin()
+                      .AllowAnyMethod()
+                      .AllowAnyHeader();
+                Console.WriteLine("CORS: Allowing all origins (Development mode)");
+            }
+            else
+            {
+                throw new InvalidOperationException("ALLOWED_ORIGINS must be configured for production");
+            }
+        }
+        else
+        {
+            // Production - specific origins only
+            policy.WithOrigins(allowedOrigins.Split(',', StringSplitOptions.RemoveEmptyEntries))
+                  .AllowAnyMethod()
+                  .AllowAnyHeader()
+                  .AllowCredentials();
+            Console.WriteLine($"CORS: Allowing origins: {allowedOrigins}");
+        }
     });
 });
 
@@ -249,7 +265,7 @@ if (app.Environment.IsDevelopment())
 app.UseStaticFiles();
 
 app.UseHttpsRedirection();
-app.UseCors("AllowAll");
+app.UseCors("AppCorsPolicy");
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();

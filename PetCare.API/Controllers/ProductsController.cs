@@ -8,7 +8,7 @@ namespace PetCare.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[AllowAnonymous]
+[Authorize] // Require authentication by default
 public class ProductsController : ControllerBase
 {
     private readonly IProductService _productService;
@@ -22,6 +22,7 @@ public class ProductsController : ControllerBase
     /// Get product by ID
     /// </summary>
     [HttpGet("{id}")]
+    [AllowAnonymous] // Public read access
     public async Task<IActionResult> GetById(Guid id)
     {
         var result = await _productService.GetProductByIdAsync(id);
@@ -38,6 +39,7 @@ public class ProductsController : ControllerBase
     /// Get all products with pagination
     /// </summary>
     [HttpGet]
+    [AllowAnonymous] // Public read access
     public async Task<IActionResult> GetAll([FromQuery] int page = 1, [FromQuery] int pageSize = 10)
     {
         var result = await _productService.GetProductsAsync(page, pageSize);
@@ -48,6 +50,7 @@ public class ProductsController : ControllerBase
     /// Get products by category
     /// </summary>
     [HttpGet("category/{categoryId}")]
+    [AllowAnonymous] // Public read access
     public async Task<IActionResult> GetByCategory(Guid categoryId)
     {
         var result = await _productService.GetProductsByCategoryAsync(categoryId);
@@ -58,6 +61,7 @@ public class ProductsController : ControllerBase
     /// Search products
     /// </summary>
     [HttpGet("search")]
+    [AllowAnonymous] // Public read access
     public async Task<IActionResult> Search([FromQuery] string searchTerm)
     {
         if (string.IsNullOrWhiteSpace(searchTerm))
@@ -73,6 +77,7 @@ public class ProductsController : ControllerBase
     /// Get all active products
     /// </summary>
     [HttpGet("active")]
+    [AllowAnonymous] // Public read access
     public async Task<IActionResult> GetActive()
     {
         var result = await _productService.GetActiveProductsAsync();
