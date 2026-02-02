@@ -248,11 +248,9 @@ using (var scope = app.Services.CreateScope())
 */
 
 // Configure the HTTP request pipeline
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+// Enable Swagger in all environments (you can restrict later)
+app.UseSwagger();
+app.UseSwaggerUI();
 
 // Enable serving static files from wwwroot
 app.UseStaticFiles();
