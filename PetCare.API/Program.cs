@@ -212,18 +212,11 @@ builder.Services.AddCors(options =>
     {
         if (string.IsNullOrEmpty(allowedOrigins) || allowedOrigins == "*")
         {
-            // Development fallback - allow all
-            if (builder.Environment.IsDevelopment())
-            {
-                policy.AllowAnyOrigin()
-                      .AllowAnyMethod()
-                      .AllowAnyHeader();
-                Console.WriteLine("CORS: Allowing all origins (Development mode)");
-            }
-            else
-            {
-                throw new InvalidOperationException("ALLOWED_ORIGINS must be configured for production");
-            }
+            // Allow all origins (development or when explicitly set to *)
+            policy.AllowAnyOrigin()
+                  .AllowAnyMethod()
+                  .AllowAnyHeader();
+            Console.WriteLine($"CORS: Allowing all origins ({builder.Environment.EnvironmentName} mode)");
         }
         else
         {
