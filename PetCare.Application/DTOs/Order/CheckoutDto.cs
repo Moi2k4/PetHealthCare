@@ -1,6 +1,6 @@
 namespace PetCare.Application.DTOs.Order;
 
-public class CreateOrderDto
+public class CheckoutDto
 {
     public string ShippingName { get; set; } = string.Empty;
     public string ShippingPhone { get; set; } = string.Empty;
@@ -10,11 +10,4 @@ public class CreateOrderDto
     public string? Note { get; set; }
     public string? PaymentMethod { get; set; }
     public string? VoucherCode { get; set; }
-    public List<OrderItemRequestDto> Items { get; set; } = new();
-}
-
-public class OrderItemRequestDto
-{
-    public Guid ProductId { get; set; }
-    public int Quantity { get; set; }
 }

@@ -16,6 +16,9 @@ public interface IUnitOfWork : IDisposable
     
     // Generic repository access
     IGenericRepository<T> Repository<T>() where T : class;
+    
+    // Direct context access (use sparingly)
+    PetCare.Infrastructure.Data.PetCareDbContext GetContext();
 
     // Transaction methods
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);

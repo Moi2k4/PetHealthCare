@@ -11,6 +11,9 @@ using PetCare.Application.DTOs.Subscription;
 using PetCare.Application.DTOs.Notification;
 using PetCare.Application.DTOs.Review;
 using PetCare.Application.DTOs.Health;
+using PetCare.Application.DTOs.Payment;
+using PetCare.Application.DTOs.Voucher;
+using PetCare.Application.DTOs.Chat;
 using PetCare.Domain.Entities;
 
 namespace PetCare.Application.Mappings;
@@ -44,8 +47,12 @@ public class MappingProfile : Profile
         // Product mappings
         CreateMap<Product, ProductDto>()
             .ForMember(dest => dest.CategoryName, opt => opt.MapFrom(src => src.Category != null ? src.Category.CategoryName : null))
-            .ForMember(dest => dest.BrandName, opt => opt.MapFrom(src => src.Brand != null ? src.Brand.BrandName : null))
             .ForMember(dest => dest.Images, opt => opt.MapFrom(src => src.Images.OrderBy(i => i.DisplayOrder).Select(i => i.ImageUrl).ToList()));
+             
+        CreateMap<CreateProductDto, Product>()
+            .ForMember(dest => dest.Images, opt => opt.Ignore()); // Handled manually service side
+        CreateMap<UpdateProductDto, Product>()
+            .ForAllMembers(opts => opts.Condition((src, dest, srcMember) => srcMember != null));
 
         // Order mappings
         CreateMap<Order, OrderDto>();
@@ -97,5 +104,17 @@ public class MappingProfile : Profile
         CreateMap<HealthReminder, HealthReminderDto>()
             .ForMember(dest => dest.PetName, opt => opt.MapFrom(src => src.Pet != null ? src.Pet.PetName : null))
             .ForMember(dest => dest.IsUpcoming, opt => opt.MapFrom(src => !src.IsCompleted && src.ReminderDate >= DateTime.UtcNow && src.ReminderDate <= DateTime.UtcNow.AddDays(7)));
+
+        // Payment mappings
+        CreateMap<Payment, PaymentDto>()
+            .ForMember(dest => dest.OrderNumber, opt => opt.MapFrom(src => src.Order != null ? src.Order.OrderNumber : string.Empty));
+
+        // Voucher mappings
+        CreateMap<Voucher, VoucherDto>();
+        CreateMap<VoucherUsage, VoucherDto>();
+
+        // Chat mappings
+        CreateMap<ChatSession, ChatSessionDto>();
+        CreateMap<ChatMessage, ChatMessageDto>();
     }
 }

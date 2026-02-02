@@ -156,6 +156,11 @@ public class LocalImageUploadService : IImageUploadService
         return $"{timestamp}_{guid}{extension.ToLowerInvariant()}";
     }
 
+    public Task<ServiceResult<string>> UploadImageFromUrlAsync(string imageUrl, string folder = "general")
+    {
+        return Task.FromResult(ServiceResult<string>.FailureResult("Upload from URL is not supported by the local provider"));
+    }
+
     public string GetOptimizedImageUrl(string imageUrl, int? width = null, int? height = null, int quality = 80)
     {
         // Local storage doesn't support on-the-fly optimization

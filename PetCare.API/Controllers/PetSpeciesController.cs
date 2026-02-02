@@ -1,4 +1,5 @@
 using AutoMapper;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PetCare.Application.DTOs.Pet;
@@ -8,6 +9,7 @@ namespace PetCare.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[AllowAnonymous]
 public class PetSpeciesController : ControllerBase
 {
     private readonly PetCareDbContext _context;

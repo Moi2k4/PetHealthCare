@@ -97,17 +97,7 @@ public static class DbInitializer
             await context.ProductCategories.AddRangeAsync(productCategories);
             await context.SaveChangesAsync();
 
-            // Seed Brands
-            var brands = new List<Brand>
-            {
-                new Brand { BrandName = "Royal Canin", Description = "Thương hiệu thức ăn cao cấp cho thú cưng" },
-                new Brand { BrandName = "Pedigree", Description = "Thức ăn cho chó uy tín" },
-                new Brand { BrandName = "Whiskas", Description = "Thức ăn cho mèo hàng đầu" },
-                new Brand { BrandName = "Me-O", Description = "Thức ăn cho mèo giá tốt" },
-                new Brand { BrandName = "SmartHeart", Description = "Thức ăn dinh dưỡng cho thú cưng" }
-            };
-            await context.Brands.AddRangeAsync(brands);
-            await context.SaveChangesAsync();
+
 
             // Seed Branches
             var branches = new List<Branch>

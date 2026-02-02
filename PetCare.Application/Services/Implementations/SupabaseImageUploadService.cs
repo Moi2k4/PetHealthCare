@@ -174,6 +174,11 @@ public class SupabaseImageUploadService : IImageUploadService
         return $"{Guid.NewGuid()}{extension.ToLowerInvariant()}";
     }
 
+    public Task<ServiceResult<string>> UploadImageFromUrlAsync(string imageUrl, string folder = "general")
+    {
+        return Task.FromResult(ServiceResult<string>.FailureResult("Upload from URL is not supported by the Supabase provider"));
+    }
+
     public string GetOptimizedImageUrl(string imageUrl, int? width = null, int? height = null, int quality = 80)
     {
         // Supabase Storage doesn't support on-the-fly transformations

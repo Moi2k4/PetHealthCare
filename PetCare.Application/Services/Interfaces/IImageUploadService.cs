@@ -13,6 +13,11 @@ public interface IImageUploadService
     /// Upload a single image and return the URL wrapped in ServiceResult
     /// </summary>
     Task<ServiceResult<string>> UploadImageAsync(IFormFile file, string folder = "general");
+
+    /// <summary>
+    /// Upload an image from a URL and return the new Cloudinary URL wrapped in ServiceResult
+    /// </summary>
+    Task<ServiceResult<string>> UploadImageFromUrlAsync(string imageUrl, string folder = "general");
     
     /// <summary>
     /// Upload multiple images and return URLs wrapped in ServiceResult

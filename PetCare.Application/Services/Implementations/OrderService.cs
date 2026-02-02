@@ -165,6 +165,70 @@ public class OrderService : IOrderService
                 order.TotalAmount = totalAmount;
                 order.ShippingFee = CalculateShippingFee(totalAmount);
                 order.DiscountAmount = 0;
+
+                // Apply voucher if provided
+                if (!string.IsNullOrEmpty(createOrderDto.VoucherCode))
+                {
+                    var voucherRepo = _unitOfWork.Repository<Voucher>();
+                    var voucher = await voucherRepo.FirstOrDefaultAsync(v => 
+                        v.Code == createOrderDto.VoucherCode && 
+                        v.IsActive && 
+                        v.ValidFrom <= DateTime.UtcNow && 
+                        v.ValidTo >= DateTime.UtcNow);
+
+                    if (voucher != null)
+                    {
+                        // Check usage limit
+                        if (voucher.UsageLimit.HasValue && voucher.UsedCount >= voucher.UsageLimit.Value)
+                        {
+                            await _unitOfWork.RollbackTransactionAsync();
+                            return ServiceResult<OrderDto>.FailureResult("Voucher usage limit exceeded");
+                        }
+
+                        // Check minimum order amount
+                        if (voucher.MinimumOrderAmount.HasValue && totalAmount < voucher.MinimumOrderAmount.Value)
+                        {
+                            await _unitOfWork.RollbackTransactionAsync();
+                            return ServiceResult<OrderDto>.FailureResult($"Minimum order amount of {voucher.MinimumOrderAmount.Value:N0} required for this voucher");
+                        }
+
+                        // Calculate discount
+                        decimal discount = 0;
+                        if (voucher.DiscountType == "percentage")
+                        {
+                            discount = totalAmount * (voucher.DiscountValue / 100);
+                            if (voucher.MaximumDiscountAmount.HasValue && discount > voucher.MaximumDiscountAmount.Value)
+                            {
+                                discount = voucher.MaximumDiscountAmount.Value;
+                            }
+                        }
+                        else // fixed
+                        {
+                            discount = voucher.DiscountValue;
+                        }
+
+                        order.DiscountAmount = discount;
+                        order.VoucherId = voucher.Id;
+                        order.VoucherCode = voucher.Code;
+
+                        // Update voucher usage
+                        voucher.UsedCount++;
+                        await voucherRepo.UpdateAsync(voucher);
+
+                        // Record voucher usage
+                        var voucherUsageRepo = _unitOfWork.Repository<VoucherUsage>();
+                        var voucherUsage = new VoucherUsage
+                        {
+                            VoucherId = voucher.Id,
+                            UserId = userId,
+                            OrderId = order.Id,
+                            DiscountAmount = discount,
+                            UsedAt = DateTime.UtcNow
+                        };
+                        await voucherUsageRepo.AddAsync(voucherUsage);
+                    }
+                }
+
                 order.FinalAmount = order.TotalAmount + order.ShippingFee - order.DiscountAmount;
 
                 await _unitOfWork.Orders.AddAsync(order);
@@ -190,6 +254,58 @@ public class OrderService : IOrderService
         catch (Exception ex)
         {
             return ServiceResult<OrderDto>.FailureResult($"Error creating order: {ex.Message}");
+        }
+    }
+
+    public async Task<ServiceResult<OrderDto>> CheckoutFromCartAsync(Guid userId, CheckoutDto checkoutDto)
+    {
+        try
+        {
+            // Get user's cart items
+            var cartItemRepo = _unitOfWork.Repository<CartItem>();
+            var cartItems = await cartItemRepo.FindAsync(c => c.UserId == userId);
+            
+            if (!cartItems.Any())
+            {
+                return ServiceResult<OrderDto>.FailureResult("Cart is empty");
+            }
+
+            // Convert cart items to order items
+            var orderItems = new List<OrderItemRequestDto>();
+            foreach (var cartItem in cartItems)
+            {
+                var product = await _unitOfWork.Products.GetByIdAsync(cartItem.ProductId);
+                if (product == null || !product.IsActive)
+                {
+                    return ServiceResult<OrderDto>.FailureResult($"Product in cart is no longer available");
+                }
+
+                orderItems.Add(new OrderItemRequestDto
+                {
+                    ProductId = cartItem.ProductId,
+                    Quantity = cartItem.Quantity
+                });
+            }
+
+            // Create order from cart items
+            var createOrderDto = new CreateOrderDto
+            {
+                ShippingName = checkoutDto.ShippingName,
+                ShippingPhone = checkoutDto.ShippingPhone,
+                ShippingAddress = checkoutDto.ShippingAddress,
+                ShippingCity = checkoutDto.ShippingCity,
+                ShippingDistrict = checkoutDto.ShippingDistrict,
+                Note = checkoutDto.Note,
+                PaymentMethod = checkoutDto.PaymentMethod,
+                VoucherCode = checkoutDto.VoucherCode,
+                Items = orderItems
+            };
+
+            return await CreateOrderAsync(userId, createOrderDto);
+        }
+        catch (Exception ex)
+        {
+            return ServiceResult<OrderDto>.FailureResult($"Error during checkout: {ex.Message}");
         }
     }
 

@@ -9,4 +9,5 @@ public interface IProductRepository : IGenericRepository<Product>
     Task<IEnumerable<Product>> GetActiveProductsAsync();
     Task<IEnumerable<Product>> SearchProductsAsync(string searchTerm);
     Task<Product?> GetProductBySkuAsync(string sku);
+    Task DeleteProductImagesAsync(Guid productId);
 }

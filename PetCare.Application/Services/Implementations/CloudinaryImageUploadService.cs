@@ -80,6 +80,48 @@ public class CloudinaryImageUploadService : IImageUploadService
         }
     }
 
+    public async Task<ServiceResult<string>> UploadImageFromUrlAsync(string imageUrl, string folder = "petcare")
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(imageUrl))
+            {
+                return ServiceResult<string>.FailureResult("Image URL is required");
+            }
+
+            // Generate unique filename 
+            // We assume jpg extension if we can't determine it, Cloudinary handles format detection mostly
+            var extension = Path.GetExtension(imageUrl);
+            if (string.IsNullOrEmpty(extension) || extension.Length > 5) extension = ".jpg";
+            
+            var uniqueFileName = GenerateUniqueFileName(extension);
+
+            var uploadParams = new ImageUploadParams
+            {
+                File = new FileDescription(imageUrl),
+                Folder = folder,
+                PublicId = Path.GetFileNameWithoutExtension(uniqueFileName),
+                Overwrite = false,
+                Transformation = new Transformation()
+                    .Quality("auto:good")
+                    .FetchFormat("auto")
+            };
+
+            var uploadResult = await _cloudinary.UploadAsync(uploadParams);
+
+            if (uploadResult.StatusCode == System.Net.HttpStatusCode.OK)
+            {
+                return ServiceResult<string>.SuccessResult(uploadResult.SecureUrl.ToString());
+            }
+
+            return ServiceResult<string>.FailureResult($"Upload failed: {uploadResult.Error?.Message ?? "Unknown error"}");
+        }
+        catch (Exception ex)
+        {
+            return ServiceResult<string>.FailureResult($"Upload failed: {ex.Message}");
+        }
+    }
+
     public async Task<ServiceResult<List<string>>> UploadImagesAsync(IEnumerable<IFormFile> files, string folder = "petcare")
     {
         var uploadedUrls = new List<string>();

@@ -122,6 +122,11 @@ builder.Services.AddScoped<ISubscriptionService, SubscriptionService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IReviewService, ReviewService>();
 builder.Services.AddScoped<IHealthTrackingService, HealthTrackingService>();
+builder.Services.AddScoped<IPaymentService, PaymentService>();
+// TODO: Uncomment when services are implemented
+// builder.Services.AddScoped<IVoucherService, VoucherService>();
+builder.Services.AddScoped<IChatService, ChatService>();
+// builder.Services.AddScoped<IDashboardService, DashboardService>();
 
 // Add HttpClient for AI services
 builder.Services.AddHttpClient();

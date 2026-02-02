@@ -46,6 +46,11 @@ public class UnitOfWork : IUnitOfWork
         return (IGenericRepository<T>)_repositories[type];
     }
 
+    public PetCareDbContext GetContext()
+    {
+        return _context;
+    }
+
     public async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         return await _context.SaveChangesAsync(cancellationToken);

@@ -7,6 +7,7 @@ namespace PetCare.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[AllowAnonymous]
 public class ProductCategoriesController : ControllerBase
 {
     private readonly IProductCategoryService _categoryService;

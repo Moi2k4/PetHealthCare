@@ -11,11 +11,20 @@ public class ProductRepository : GenericRepository<Product>, IProductRepository
     {
     }
 
+    public async Task DeleteProductImagesAsync(Guid productId)
+    {
+        var images = await _context.ProductImages
+            .Where(p => p.ProductId == productId)
+            .ToListAsync();
+        
+        _context.ProductImages.RemoveRange(images);
+    }
+
     public async Task<IEnumerable<Product>> GetProductsByCategoryAsync(Guid categoryId)
     {
         return await _dbSet
             .Include(p => p.Category)
-            .Include(p => p.Brand)
+
             .Include(p => p.Images)
             .Where(p => p.CategoryId == categoryId && p.IsActive)
             .ToListAsync();
@@ -25,7 +34,7 @@ public class ProductRepository : GenericRepository<Product>, IProductRepository
     {
         return await _dbSet
             .Include(p => p.Category)
-            .Include(p => p.Brand)
+
             .Include(p => p.Images)
             .Include(p => p.Reviews.Where(r => r.IsApproved))
             .FirstOrDefaultAsync(p => p.Id == productId);
@@ -35,7 +44,7 @@ public class ProductRepository : GenericRepository<Product>, IProductRepository
     {
         return await _dbSet
             .Include(p => p.Category)
-            .Include(p => p.Brand)
+
             .Include(p => p.Images)
             .Where(p => p.IsActive)
             .ToListAsync();
@@ -45,7 +54,7 @@ public class ProductRepository : GenericRepository<Product>, IProductRepository
     {
         return await _dbSet
             .Include(p => p.Category)
-            .Include(p => p.Brand)
+
             .Include(p => p.Images)
             .Where(p => p.IsActive && 
                 (p.ProductName.Contains(searchTerm) || 
@@ -57,7 +66,7 @@ public class ProductRepository : GenericRepository<Product>, IProductRepository
     {
         return await _dbSet
             .Include(p => p.Category)
-            .Include(p => p.Brand)
+
             .FirstOrDefaultAsync(p => p.Sku == sku);
     }
 }

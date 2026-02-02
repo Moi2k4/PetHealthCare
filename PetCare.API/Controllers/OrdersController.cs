@@ -100,6 +100,33 @@ public class OrdersController : ControllerBase
     }
 
     /// <summary>
+    /// Create order from cart
+    /// </summary>
+    [HttpPost("checkout")]
+    public async Task<IActionResult> CheckoutFromCart([FromBody] CheckoutDto checkoutDto)
+    {
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(ModelState);
+        }
+
+        var userId = GetUserId();
+        if (userId == Guid.Empty)
+        {
+            return Unauthorized();
+        }
+
+        var result = await _orderService.CheckoutFromCartAsync(userId, checkoutDto);
+        
+        if (!result.Success)
+        {
+            return BadRequest(result);
+        }
+
+        return CreatedAtAction(nameof(GetById), new { id = result.Data!.Id }, result);
+    }
+
+    /// <summary>
     /// Update order status (admin only)
     /// </summary>
     [HttpPut("{id}/status")]

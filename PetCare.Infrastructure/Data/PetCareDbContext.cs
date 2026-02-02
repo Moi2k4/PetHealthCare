@@ -24,7 +24,7 @@ public class PetCareDbContext : DbContext
 
     // E-Commerce
     public DbSet<ProductCategory> ProductCategories { get; set; }
-    public DbSet<Brand> Brands { get; set; }
+
     public DbSet<Product> Products { get; set; }
     public DbSet<ProductImage> ProductImages { get; set; }
     public DbSet<CartItem> CartItems { get; set; }
@@ -64,6 +64,11 @@ public class PetCareDbContext : DbContext
     public DbSet<UserSubscription> UserSubscriptions { get; set; }
     public DbSet<AIHealthAnalysis> AIHealthAnalyses { get; set; }
 
+    // Payment & Vouchers
+    public DbSet<Payment> Payments { get; set; }
+    public DbSet<Voucher> Vouchers { get; set; }
+    public DbSet<VoucherUsage> VoucherUsages { get; set; }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -80,6 +85,8 @@ public class PetCareDbContext : DbContext
         ConfigureChatEntities(modelBuilder);
         ConfigureReviewEntities(modelBuilder);
         ConfigureSubscriptionEntities(modelBuilder);
+        ConfigurePaymentEntities(modelBuilder);
+        ConfigureVoucherEntities(modelBuilder);
     }
 
     private void ConfigureUserEntities(ModelBuilder modelBuilder)
@@ -290,16 +297,7 @@ public class PetCareDbContext : DbContext
                 .OnDelete(DeleteBehavior.Restrict);
         });
 
-        modelBuilder.Entity<Brand>(entity =>
-        {
-            entity.ToTable("brands");
-            entity.HasKey(e => e.Id);
-            entity.Property(e => e.Id).HasColumnName("id");
-            entity.Property(e => e.BrandName).HasColumnName("brand_name").IsRequired().HasMaxLength(100);
-            entity.Property(e => e.LogoUrl).HasColumnName("logo_url");
-            entity.Property(e => e.Description).HasColumnName("description");
-            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
-        });
+
 
         modelBuilder.Entity<Product>(entity =>
         {
@@ -307,7 +305,7 @@ public class PetCareDbContext : DbContext
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Id).HasColumnName("id");
             entity.Property(e => e.CategoryId).HasColumnName("category_id");
-            entity.Property(e => e.BrandId).HasColumnName("brand_id");
+
             entity.Property(e => e.ProductName).HasColumnName("product_name").IsRequired().HasMaxLength(255);
             entity.Property(e => e.Description).HasColumnName("description");
             entity.Property(e => e.Price).HasColumnName("price").HasPrecision(12, 2);
@@ -325,10 +323,7 @@ public class PetCareDbContext : DbContext
                 .HasForeignKey(e => e.CategoryId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            entity.HasOne(e => e.Brand)
-                .WithMany(b => b.Products)
-                .HasForeignKey(e => e.BrandId)
-                .OnDelete(DeleteBehavior.Restrict);
+
 
             entity.HasIndex(e => e.Sku).IsUnique();
             entity.HasIndex(e => e.CategoryId);
@@ -1009,6 +1004,104 @@ public class PetCareDbContext : DbContext
             entity.HasIndex(e => e.PetId);
             entity.HasIndex(e => e.UserId);
             entity.HasIndex(e => new { e.PetId, e.AnalysisType });
+        });
+    }
+
+    private void ConfigurePaymentEntities(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<Payment>(entity =>
+        {
+            entity.ToTable("payments");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.OrderId).HasColumnName("order_id");
+            entity.Property(e => e.UserId).HasColumnName("user_id");
+            entity.Property(e => e.PaymentMethod).HasColumnName("payment_method").IsRequired().HasMaxLength(50);
+            entity.Property(e => e.PaymentStatus).HasColumnName("payment_status").IsRequired().HasMaxLength(20);
+            entity.Property(e => e.Amount).HasColumnName("amount").HasPrecision(10, 2);
+            entity.Property(e => e.TransactionId).HasColumnName("transaction_id").HasMaxLength(255);
+            entity.Property(e => e.PaymentGatewayResponse).HasColumnName("payment_gateway_response");
+            entity.Property(e => e.PaidAt).HasColumnName("paid_at");
+            entity.Property(e => e.RefundReason).HasColumnName("refund_reason");
+            entity.Property(e => e.RefundedAt).HasColumnName("refunded_at");
+            entity.Property(e => e.RefundAmount).HasColumnName("refund_amount").HasPrecision(10, 2);
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+            entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+
+            entity.HasOne(e => e.Order)
+                .WithMany()
+                .HasForeignKey(e => e.OrderId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(e => e.OrderId);
+            entity.HasIndex(e => e.UserId);
+            entity.HasIndex(e => e.TransactionId);
+        });
+    }
+
+    private void ConfigureVoucherEntities(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<Voucher>(entity =>
+        {
+            entity.ToTable("vouchers");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.Code).HasColumnName("code").IsRequired().HasMaxLength(50);
+            entity.Property(e => e.Name).HasColumnName("name").IsRequired().HasMaxLength(200);
+            entity.Property(e => e.Description).HasColumnName("description");
+            entity.Property(e => e.DiscountType).HasColumnName("discount_type").IsRequired().HasMaxLength(20);
+            entity.Property(e => e.DiscountValue).HasColumnName("discount_value").HasPrecision(10, 2);
+            entity.Property(e => e.MinimumOrderAmount).HasColumnName("minimum_order_amount").HasPrecision(10, 2);
+            entity.Property(e => e.MaximumDiscountAmount).HasColumnName("maximum_discount_amount").HasPrecision(10, 2);
+            entity.Property(e => e.UsageLimit).HasColumnName("usage_limit");
+            entity.Property(e => e.UsedCount).HasColumnName("used_count");
+            entity.Property(e => e.ValidFrom).HasColumnName("valid_from");
+            entity.Property(e => e.ValidTo).HasColumnName("valid_to");
+            entity.Property(e => e.IsActive).HasColumnName("is_active");
+            entity.Property(e => e.ApplicableProductCategories).HasColumnName("applicable_product_categories");
+            entity.Property(e => e.ApplicableServices).HasColumnName("applicable_services");
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+            entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+
+            entity.HasIndex(e => e.Code).IsUnique();
+            entity.HasIndex(e => new { e.IsActive, e.ValidFrom, e.ValidTo });
+        });
+
+        modelBuilder.Entity<VoucherUsage>(entity =>
+        {
+            entity.ToTable("voucher_usages");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.VoucherId).HasColumnName("voucher_id");
+            entity.Property(e => e.UserId).HasColumnName("user_id");
+            entity.Property(e => e.OrderId).HasColumnName("order_id");
+            entity.Property(e => e.DiscountAmount).HasColumnName("discount_amount").HasPrecision(10, 2);
+            entity.Property(e => e.UsedAt).HasColumnName("used_at");
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+
+            entity.HasOne(e => e.Voucher)
+                .WithMany(v => v.VoucherUsages)
+                .HasForeignKey(e => e.VoucherId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.Order)
+                .WithMany()
+                .HasForeignKey(e => e.OrderId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(e => e.VoucherId);
+            entity.HasIndex(e => e.UserId);
+            entity.HasIndex(e => e.OrderId);
         });
     }
 
