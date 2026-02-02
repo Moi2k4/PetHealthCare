@@ -1,1 +1,1 @@
-web: cd PetCare.API && dotnet PetCare.API.dll --urls http://0.0.0.0:$PORT
+web: cd $HOME/heroku_output && ./PetCare.API --urls http://0.0.0.0:$PORT
