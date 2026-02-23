@@ -122,10 +122,19 @@ public class ProductService : IProductService
     {
         try
         {
-            // Optional: Check if SKU exists
-            if (!string.IsNullOrEmpty(createProductDto.Sku))
+            // Validate that CategoryId exists to avoid FK constraint violations
+            if (createProductDto.CategoryId.HasValue && createProductDto.CategoryId.Value != Guid.Empty)
             {
-               // We would need a method in repo to check SKU, skipping for now or assumed handled by DB constraint/repo catch
+                var category = await _unitOfWork.Repository<ProductCategory>().GetByIdAsync(createProductDto.CategoryId.Value);
+                if (category == null)
+                {
+                    return ServiceResult<ProductDto>.FailureResult($"Category with ID '{createProductDto.CategoryId}' does not exist.");
+                }
+            }
+            else
+            {
+                // CategoryId is required
+                return ServiceResult<ProductDto>.FailureResult("A valid CategoryId is required.");
             }
 
             var product = _mapper.Map<Product>(createProductDto);
