@@ -54,6 +54,10 @@ public class ProductsController : ControllerBase
     public async Task<IActionResult> GetByCategory(Guid categoryId)
     {
         var result = await _productService.GetProductsByCategoryAsync(categoryId);
+        if (!result.Success)
+        {
+            return NotFound(result);
+        }
         return Ok(result);
     }
 
@@ -70,6 +74,10 @@ public class ProductsController : ControllerBase
         }
 
         var result = await _productService.SearchProductsAsync(searchTerm);
+        if (!result.Success)
+        {
+            return NotFound(result);
+        }
         return Ok(result);
     }
 
@@ -81,6 +89,10 @@ public class ProductsController : ControllerBase
     public async Task<IActionResult> GetActive()
     {
         var result = await _productService.GetActiveProductsAsync();
+        if (!result.Success)
+        {
+            return NotFound(result);
+        }
         return Ok(result);
     }
     
