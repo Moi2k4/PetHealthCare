@@ -147,7 +147,9 @@ public class AuthService : IAuthService
         // Ensure Role is always added to claims
         if (user.Role != null && !string.IsNullOrWhiteSpace(user.Role.RoleName))
         {
-            claims.Add(new Claim(ClaimTypes.Role, user.Role.RoleName));
+            // Normalize to PascalCase so "admin" -> "Admin" matches [Authorize(Roles = "Admin,...")]
+            var normalizedRole = char.ToUpper(user.Role.RoleName[0]) + user.Role.RoleName.Substring(1).ToLower();
+            claims.Add(new Claim(ClaimTypes.Role, normalizedRole));
         }
         else
         {
