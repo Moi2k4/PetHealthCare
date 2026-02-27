@@ -76,7 +76,7 @@ public class ProductsController : ControllerBase
         var result = await _productService.SearchProductsAsync(searchTerm);
         if (!result.Success)
         {
-            return NotFound(result);
+            return StatusCode(500, result);
         }
         return Ok(result);
     }
