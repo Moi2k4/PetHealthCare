@@ -52,13 +52,13 @@ public class ProductRepository : GenericRepository<Product>, IProductRepository
 
     public async Task<IEnumerable<Product>> SearchProductsAsync(string searchTerm)
     {
+        var lowerSearch = searchTerm.ToLower();
         return await _dbSet
             .Include(p => p.Category)
-
             .Include(p => p.Images)
             .Where(p => p.IsActive && 
-                (p.ProductName.Contains(searchTerm) || 
-                 (p.Description != null && p.Description.Contains(searchTerm))))
+                (p.ProductName.ToLower().Contains(lowerSearch) || 
+                 (p.Description != null && p.Description.ToLower().Contains(lowerSearch))))
             .ToListAsync();
     }
 
