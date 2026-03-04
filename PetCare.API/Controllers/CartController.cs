@@ -111,18 +111,23 @@ public class CartController : ControllerBase
     }
 
     /// <summary>
-    /// Remove item from cart
+    /// Remove item from cart. Optionally specify a quantity to decrease; if omitted or >= current quantity, the item is fully removed.
     /// </summary>
     [HttpDelete("{cartItemId}")]
-    public async Task<IActionResult> RemoveFromCart(Guid cartItemId)
+    public async Task<IActionResult> RemoveFromCart(Guid cartItemId, [FromQuery] int? quantity = null)
     {
+        if (quantity.HasValue && quantity.Value <= 0)
+        {
+            return BadRequest("Quantity must be greater than 0.");
+        }
+
         var userId = GetUserId();
         if (userId == Guid.Empty)
         {
             return Unauthorized();
         }
 
-        var result = await _cartService.RemoveFromCartAsync(userId, cartItemId);
+        var result = await _cartService.RemoveFromCartAsync(userId, cartItemId, quantity);
         
         if (!result.Success)
         {

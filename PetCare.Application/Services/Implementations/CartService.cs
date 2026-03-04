@@ -172,7 +172,7 @@ public class CartService : ICartService
         }
     }
 
-    public async Task<ServiceResult<bool>> RemoveFromCartAsync(Guid userId, Guid cartItemId)
+    public async Task<ServiceResult<bool>> RemoveFromCartAsync(Guid userId, Guid cartItemId, int? quantity = null)
     {
         try
         {
@@ -182,6 +182,14 @@ public class CartService : ICartService
             if (cartItem == null)
             {
                 return ServiceResult<bool>.FailureResult("Cart item not found");
+            }
+
+            if (quantity.HasValue && quantity.Value > 0 && quantity.Value < cartItem.Quantity)
+            {
+                cartItem.Quantity -= quantity.Value;
+                await cartItemRepo.UpdateAsync(cartItem);
+                await _unitOfWork.SaveChangesAsync();
+                return ServiceResult<bool>.SuccessResult(true, $"Removed {quantity.Value} item(s) from cart");
             }
 
             await cartItemRepo.DeleteAsync(cartItem);
