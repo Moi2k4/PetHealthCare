@@ -29,7 +29,7 @@ public class CartService : ICartService
             
             foreach (var item in cartItems)
             {
-                var product = await _unitOfWork.Products.GetByIdAsync(item.ProductId);
+                var product = await _unitOfWork.Products.GetProductWithImagesAsync(item.ProductId);
                 if (product != null)
                 {
                     var dto = new CartItemDto
@@ -59,7 +59,7 @@ public class CartService : ICartService
     {
         try
         {
-            var product = await _unitOfWork.Products.GetByIdAsync(addToCartDto.ProductId);
+            var product = await _unitOfWork.Products.GetProductWithImagesAsync(addToCartDto.ProductId);
             if (product == null)
             {
                 return ServiceResult<CartItemDto>.FailureResult("Product not found");
@@ -137,7 +137,7 @@ public class CartService : ICartService
                 return ServiceResult<CartItemDto>.FailureResult("Cart item not found");
             }
 
-            var product = await _unitOfWork.Products.GetByIdAsync(cartItem.ProductId);
+            var product = await _unitOfWork.Products.GetProductWithImagesAsync(cartItem.ProductId);
             if (product == null)
             {
                 return ServiceResult<CartItemDto>.FailureResult("Product not found");
