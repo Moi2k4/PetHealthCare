@@ -10,6 +10,7 @@ public interface IProductService
     Task<ServiceResult<IEnumerable<ProductDto>>> GetProductsByCategoryAsync(Guid categoryId);
     Task<ServiceResult<IEnumerable<ProductDto>>> SearchProductsAsync(string searchTerm);
     Task<ServiceResult<IEnumerable<ProductDto>>> GetActiveProductsAsync();
+    Task<ServiceResult<IEnumerable<ProductDto>>> GetProductsByProviderAsync(Guid providerId);
     
     // Management methods
     Task<ServiceResult<ProductDto>> CreateProductAsync(CreateProductDto createProductDto);

@@ -24,6 +24,7 @@ public static class DbInitializer
             {
                 new Role { RoleName = "admin", Description = "Quản trị viên hệ thống" },
                 new Role { RoleName = "service_provider", Description = "Nhà cung cấp dịch vụ (Grooming, Pet Hotel, etc.)" },
+                new Role { RoleName = "product_provider", Description = "Nhà cung cấp sản phẩm (cung cấp hàng hóa cho nhân viên nhập vào hệ thống)" },
                 new Role { RoleName = "staff", Description = "Nhân viên chăm sóc/grooming" },
                 new Role { RoleName = "user", Description = "Người dùng thông thường" }
             };

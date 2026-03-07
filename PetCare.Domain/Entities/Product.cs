@@ -15,7 +15,11 @@ public class Product : AuditableEntity
     public string? Dimensions { get; set; }
     public bool IsActive { get; set; } = true;
 
+    // Product Provider (supplier who provides the product to staff)
+    public Guid? ProviderId { get; set; }
+
     // Navigation properties
+    public virtual User? Provider { get; set; }
     public virtual ProductCategory? Category { get; set; }
 
     public virtual ICollection<ProductImage> Images { get; set; } = new List<ProductImage>();
