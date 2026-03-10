@@ -102,9 +102,12 @@ builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IProductCategoryService, ProductCategoryService>();
 builder.Services.AddScoped<IHealthRecordService, HealthRecordService>();
+builder.Services.AddScoped<IAIHealthService, AIHealthService>();
+builder.Services.AddScoped<ISubscriptionService, SubscriptionService>();
 
 // Add HttpClient for AI services
 builder.Services.AddHttpClient();
+builder.Services.AddHttpClient("GeminiClient");
 
 // Image upload service - Switch between Cloudinary and Local storage
 var useCloudinary = Environment.GetEnvironmentVariable("USE_CLOUDINARY") == "true" 

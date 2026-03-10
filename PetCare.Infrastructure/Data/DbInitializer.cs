@@ -158,6 +158,46 @@ public static class DbInitializer
             await context.FaqItems.AddRangeAsync(faqItems);
             await context.SaveChangesAsync();
 
+            // Seed Subscription Packages
+            var subscriptionPackages = new List<SubscriptionPackage>
+            {
+                new SubscriptionPackage
+                {
+                    Name                     = "Gói Miễn Phí",
+                    Description              = "Theo dõi hồ sơ sức khỏe cơ bản, hoàn toàn miễn phí.",
+                    Price                    = 0,
+                    BillingCycle             = "Month",
+                    IsActive                 = true,
+                    HasAIHealthTracking      = false,
+                    HasVaccinationTracking   = false,
+                    HasHealthReminders       = false,
+                    HasAIRecommendations     = false,
+                    HasNutritionalAnalysis   = false,
+                    HasEarlyDiseaseDetection = false,
+                    HasPrioritySupport       = false,
+                    MaxPets                  = 1
+                },
+                new SubscriptionPackage
+                {
+                    Name                     = "Gói Premium",
+                    Description              = "Theo dõi sức khỏe AI, nhắc nhở tiêm phòng và phân tích dinh dưỡng cho thú cưng.",
+                    Price                    = 5000,
+                    BillingCycle             = "Month",
+                    IsActive                 = true,
+                    HasAIHealthTracking      = true,
+                    HasVaccinationTracking   = true,
+                    HasHealthReminders       = true,
+                    HasAIRecommendations     = true,
+                    HasNutritionalAnalysis   = true,
+                    HasEarlyDiseaseDetection = true,
+                    HasPrioritySupport       = true,
+                    MaxPets                  = null // unlimited
+                }
+            };
+            await context.SubscriptionPackages.AddRangeAsync(subscriptionPackages);
+            await context.SaveChangesAsync();
+            Console.WriteLine($"✓ Seeded {subscriptionPackages.Count} subscription packages");
+
             Console.WriteLine("Database seeded successfully!");
         }
         catch (Exception ex)
