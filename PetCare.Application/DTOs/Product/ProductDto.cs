@@ -10,6 +10,8 @@ public class ProductDto
     public int StockQuantity { get; set; }
     public string? Sku { get; set; }
     public string? CategoryName { get; set; }
+    public Guid? ProviderId { get; set; }
+    public string? ProviderName { get; set; }
     public List<string> Images { get; set; } = new();
     public bool IsActive { get; set; }
 }

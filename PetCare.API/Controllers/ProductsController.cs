@@ -95,6 +95,21 @@ public class ProductsController : ControllerBase
         }
         return Ok(result);
     }
+
+    /// <summary>
+    /// Get products supplied by a specific product provider (Admin/Staff only)
+    /// </summary>
+    [HttpGet("provider/{providerId}")]
+    [Authorize(Roles = "Admin,Staff,product_provider")]
+    public async Task<IActionResult> GetByProvider(Guid providerId)
+    {
+        var result = await _productService.GetProductsByProviderAsync(providerId);
+        if (!result.Success)
+        {
+            return NotFound(result);
+        }
+        return Ok(result);
+    }
     
 
     /// <summary>

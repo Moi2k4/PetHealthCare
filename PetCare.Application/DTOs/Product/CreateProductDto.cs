@@ -30,6 +30,8 @@ public class CreateProductDto
     public string? Dimensions { get; set; }
     
     public bool IsActive { get; set; } = true;
+
+    public Guid? ProviderId { get; set; }
     
     public List<string> ImageUrls { get; set; } = new();
 }

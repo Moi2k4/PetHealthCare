@@ -47,6 +47,7 @@ public class MappingProfile : Profile
         // Product mappings
         CreateMap<Product, ProductDto>()
             .ForMember(dest => dest.CategoryName, opt => opt.MapFrom(src => src.Category != null ? src.Category.CategoryName : null))
+            .ForMember(dest => dest.ProviderName, opt => opt.MapFrom(src => src.Provider != null ? src.Provider.FullName : null))
             .ForMember(dest => dest.Images, opt => opt.MapFrom(src => src.Images.OrderBy(i => i.DisplayOrder).Select(i => i.ImageUrl).ToList()));
              
         CreateMap<CreateProductDto, Product>()
@@ -97,13 +98,9 @@ public class MappingProfile : Profile
 
         // Health tracking mappings
         CreateMap<HealthRecord, HealthRecordDto>()
-            .ForMember(dest => dest.PetName, opt => opt.MapFrom(src => src.Pet != null ? src.Pet.PetName : null));
-        CreateMap<Vaccination, VaccinationDto>()
             .ForMember(dest => dest.PetName, opt => opt.MapFrom(src => src.Pet != null ? src.Pet.PetName : null))
-            .ForMember(dest => dest.IsOverdue, opt => opt.MapFrom(src => src.NextDueDate.HasValue && src.NextDueDate.Value < DateTime.UtcNow));
-        CreateMap<HealthReminder, HealthReminderDto>()
-            .ForMember(dest => dest.PetName, opt => opt.MapFrom(src => src.Pet != null ? src.Pet.PetName : null))
-            .ForMember(dest => dest.IsUpcoming, opt => opt.MapFrom(src => !src.IsCompleted && src.ReminderDate >= DateTime.UtcNow && src.ReminderDate <= DateTime.UtcNow.AddDays(7)));
+            .ForMember(dest => dest.RecordedByName, opt => opt.MapFrom(src => src.RecordedByUser != null ? src.RecordedByUser.FullName : null));
+        CreateMap<CreateHealthRecordDto, HealthRecord>();
 
         // Payment mappings
         CreateMap<Payment, PaymentDto>()

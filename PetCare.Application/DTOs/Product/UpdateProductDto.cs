@@ -28,4 +28,6 @@ public class UpdateProductDto
     public string? Dimensions { get; set; }
     
     public bool? IsActive { get; set; }
+
+    public Guid? ProviderId { get; set; }
 }

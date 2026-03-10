@@ -46,3 +46,4 @@ bld/
 appsettings.Development.json
 appsettings.Production.json
 appsettings.Staging.json
+PetCare.API/appsettings.json

@@ -100,25 +100,14 @@ builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IPetService, PetService>();
 builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
-builder.Services.AddScoped<ICartService, CartService>();
-builder.Services.AddScoped<IOrderService, OrderService>();
-builder.Services.AddScoped<IAppointmentService, AppointmentService>();
-builder.Services.AddScoped<IBlogService, BlogService>();
-builder.Services.AddScoped<IAIHealthService, AIHealthService>();
 builder.Services.AddScoped<IProductCategoryService, ProductCategoryService>();
-builder.Services.AddScoped<IServiceManagementService, ServiceManagementService>();
+builder.Services.AddScoped<IHealthRecordService, HealthRecordService>();
+builder.Services.AddScoped<IAIHealthService, AIHealthService>();
 builder.Services.AddScoped<ISubscriptionService, SubscriptionService>();
-builder.Services.AddScoped<INotificationService, NotificationService>();
-builder.Services.AddScoped<IReviewService, ReviewService>();
-builder.Services.AddScoped<IHealthTrackingService, HealthTrackingService>();
-builder.Services.AddScoped<IPaymentService, PaymentService>();
-// TODO: Uncomment when services are implemented
-// builder.Services.AddScoped<IVoucherService, VoucherService>();
-builder.Services.AddScoped<IChatService, ChatService>();
-// builder.Services.AddScoped<IDashboardService, DashboardService>();
 
 // Add HttpClient for AI services
 builder.Services.AddHttpClient();
+builder.Services.AddHttpClient("GeminiClient");
 
 // Image upload service - Switch between Cloudinary and Local storage
 var useCloudinary = Environment.GetEnvironmentVariable("USE_CLOUDINARY") == "true" 
