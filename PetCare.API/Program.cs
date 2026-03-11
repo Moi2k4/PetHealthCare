@@ -10,6 +10,9 @@ using PetCare.Infrastructure.Repositories.Interfaces;
 using PetCare.Infrastructure.Repositories.Implementations;
 using PetCare.Application.Services.Interfaces;
 using PetCare.Application.Services.Implementations;
+using PetCare.Infrastructure.Services;
+using PetCare.Domain.Interfaces;
+using Resend;
 
 // Load environment variables from .env file
 // Look for .env in the solution root (parent directory of PetCare.API)
@@ -104,6 +107,21 @@ builder.Services.AddScoped<IProductCategoryService, ProductCategoryService>();
 builder.Services.AddScoped<IHealthRecordService, HealthRecordService>();
 builder.Services.AddScoped<IAIHealthService, AIHealthService>();
 builder.Services.AddScoped<ISubscriptionService, SubscriptionService>();
+builder.Services.AddScoped<IBlogService, BlogService>();
+builder.Services.AddScoped<IReviewService, ReviewService>();
+
+// Resend email service
+var resendApiKey = Environment.GetEnvironmentVariable("RESEND_API_KEY")
+    ?? builder.Configuration["Resend:ApiKey"]
+    ?? string.Empty;
+builder.Services.AddOptions();
+builder.Services.AddHttpClient<ResendClient>();
+builder.Services.Configure<ResendClientOptions>(options =>
+{
+    options.ApiToken = resendApiKey;
+});
+builder.Services.AddTransient<IResend, ResendClient>();
+builder.Services.AddScoped<PetCare.Domain.Interfaces.IEmailService, ResendEmailService>();
 
 // Add HttpClient for AI services
 builder.Services.AddHttpClient();

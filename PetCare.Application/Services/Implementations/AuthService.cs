@@ -9,6 +9,7 @@ using PetCare.Application.DTOs.Auth;
 using PetCare.Application.DTOs.User;
 using PetCare.Application.Services.Interfaces;
 using PetCare.Domain.Entities;
+using PetCare.Domain.Interfaces;
 using PetCare.Infrastructure.Repositories.Interfaces;
 using BCryptNet = BCrypt.Net.BCrypt;
 
@@ -19,12 +20,14 @@ public class AuthService : IAuthService
     private readonly IUnitOfWork _unitOfWork;
     private readonly IMapper _mapper;
     private readonly JwtSettings _jwtSettings;
+    private readonly IEmailService _emailService;
 
-    public AuthService(IUnitOfWork unitOfWork, IMapper mapper, IOptions<JwtSettings> jwtOptions)
+    public AuthService(IUnitOfWork unitOfWork, IMapper mapper, IOptions<JwtSettings> jwtOptions, IEmailService emailService)
     {
         _unitOfWork = unitOfWork;
         _mapper = mapper;
         _jwtSettings = jwtOptions.Value;
+        _emailService = emailService;
     }
 
     public async Task<ServiceResult<AuthResponseDto>> RegisterAsync(RegisterUserDto registerDto)
@@ -79,6 +82,14 @@ public class AuthService : IAuthService
             }
 
             var response = await BuildAuthResponseAsync(userWithRole);
+
+            // Send welcome email (fire and forget — don't fail registration if email fails)
+            _ = Task.Run(async () =>
+            {
+                try { await _emailService.SendWelcomeEmailAsync(userWithRole.Email, userWithRole.FullName); }
+                catch { /* log handled inside service */ }
+            });
+
             return ServiceResult<AuthResponseDto>.SuccessResult(response, "Registration successful");
         }
         catch (Exception ex)
