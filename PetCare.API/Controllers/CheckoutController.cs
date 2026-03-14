@@ -296,7 +296,18 @@ public class CheckoutController : ControllerBase
         }
 
         _context.CartItems.RemoveRange(cartItems);
-        await _context.SaveChangesAsync();
+        try
+        {
+            await _context.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex)
+        {
+            return StatusCode(StatusCodes.Status500InternalServerError, new
+            {
+                success = false,
+                message = $"Checkout save failed: {ex.GetBaseException().Message}"
+            });
+        }
 
         return Ok(new
         {
