@@ -91,6 +91,7 @@ public class PetService : IPetService
             var pet = _mapper.Map<Pet>(createPetDto);
             pet.UserId = userId; // Set the authenticated user as owner
             pet.IsActive = true;
+            NormalizePetDateTimes(pet);
             
             await _unitOfWork.Pets.AddAsync(pet);
             await _unitOfWork.SaveChangesAsync();
@@ -149,6 +150,7 @@ public class PetService : IPetService
             }
 
             _mapper.Map(updatePetDto, pet);
+            NormalizePetDateTimes(pet);
             await _unitOfWork.Pets.UpdateAsync(pet);
             await _unitOfWork.SaveChangesAsync();
 
@@ -183,6 +185,7 @@ public class PetService : IPetService
 
             // Soft delete by setting IsActive to false
             pet.IsActive = false;
+            NormalizePetDateTimes(pet);
             await _unitOfWork.Pets.UpdateAsync(pet);
             await _unitOfWork.SaveChangesAsync();
 
@@ -263,6 +266,13 @@ public class PetService : IPetService
             DateTimeKind.Unspecified => DateTime.SpecifyKind(value.Value, DateTimeKind.Utc),
             _ => value.Value
         };
+    }
+
+    private static void NormalizePetDateTimes(Pet pet)
+    {
+        pet.DateOfBirth = NormalizeDateTimeToUtc(pet.DateOfBirth);
+        pet.CreatedAt = NormalizeDateTimeToUtc(pet.CreatedAt) ?? DateTime.UtcNow;
+        pet.UpdatedAt = NormalizeDateTimeToUtc(pet.UpdatedAt);
     }
 }
 
