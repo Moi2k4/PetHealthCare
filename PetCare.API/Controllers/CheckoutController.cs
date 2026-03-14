@@ -241,7 +241,7 @@ public class CheckoutController : ControllerBase
                 OrderCode = orderCode.Value,
                 Amount = amountVnd,
                 Description = payOsDescription,
-                ReturnUrl = $"{returnUrl}?orderNumber={Uri.EscapeDataString(order.OrderNumber)}&amount={finalAmount}&method=payos",
+                ReturnUrl = $"{returnUrl}?orderNumber={Uri.EscapeDataString(order.OrderNumber)}&amount={finalAmount}&method=payos&orderCode={orderCode.Value}",
                 CancelUrl = cancelUrl,
                 Items = cartItems.Select(ci => new PaymentLinkItem
                 {
@@ -324,6 +324,105 @@ public class CheckoutController : ControllerBase
                 order.OrderedAt,
                 paymentUrl,
                 orderCode
+            }
+        });
+    }
+
+    [HttpPost("confirm-payment")]
+    public async Task<IActionResult> ConfirmPayment([FromQuery] long? orderCode, [FromQuery] string? orderNumber)
+    {
+        if ((!orderCode.HasValue || orderCode.Value <= 0) && string.IsNullOrWhiteSpace(orderNumber))
+        {
+            return BadRequest(new
+            {
+                success = false,
+                message = "orderCode or orderNumber is required"
+            });
+        }
+
+        var userId = GetUserId();
+
+        var paymentQuery = _context.Payments
+            .Include(payment => payment.Order)
+            .Where(payment =>
+                payment.PaymentMethod == "payos"
+                && payment.Order.UserId == userId);
+
+        if (orderCode.HasValue && orderCode.Value > 0)
+        {
+            var orderCodeText = orderCode.Value.ToString();
+            paymentQuery = paymentQuery.Where(payment => payment.TransactionId == orderCodeText);
+        }
+
+        if (!string.IsNullOrWhiteSpace(orderNumber))
+        {
+            var normalizedOrderNumber = orderNumber.Trim();
+            paymentQuery = paymentQuery.Where(payment => payment.Order.OrderNumber == normalizedOrderNumber);
+        }
+
+        var paymentEntity = await paymentQuery
+            .OrderByDescending(payment => payment.CreatedAt)
+            .FirstOrDefaultAsync();
+
+        if (paymentEntity == null)
+        {
+            return NotFound(new
+            {
+                success = false,
+                message = "Payment not found"
+            });
+        }
+
+        var alreadyPaid = string.Equals(paymentEntity.PaymentStatus, "completed", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(paymentEntity.Order.PaymentStatus, "paid", StringComparison.OrdinalIgnoreCase);
+
+        if (alreadyPaid)
+        {
+            return Ok(new
+            {
+                success = true,
+                message = "Payment already confirmed",
+                data = new
+                {
+                    paymentEntity.Order.OrderNumber,
+                    paymentEntity.Order.FinalAmount,
+                    paymentEntity.Order.PaymentStatus,
+                    paymentEntity.Order.OrderStatus,
+                    confirmed = true,
+                    alreadyConfirmed = true
+                }
+            });
+        }
+
+        var now = DateTime.UtcNow;
+        paymentEntity.PaymentStatus = "completed";
+        paymentEntity.PaidAt ??= now;
+        paymentEntity.UpdatedAt = now;
+
+        paymentEntity.Order.PaymentStatus = "paid";
+        if (!string.Equals(paymentEntity.Order.OrderStatus, "completed", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(paymentEntity.Order.OrderStatus, "delivered", StringComparison.OrdinalIgnoreCase))
+        {
+            paymentEntity.Order.OrderStatus = "confirmed";
+        }
+        paymentEntity.Order.UpdatedAt = now;
+
+        _context.Payments.Update(paymentEntity);
+        _context.Orders.Update(paymentEntity.Order);
+        await _context.SaveChangesAsync();
+
+        return Ok(new
+        {
+            success = true,
+            message = "Payment confirmed",
+            data = new
+            {
+                paymentEntity.Order.OrderNumber,
+                paymentEntity.Order.FinalAmount,
+                paymentEntity.Order.PaymentStatus,
+                paymentEntity.Order.OrderStatus,
+                confirmed = true,
+                alreadyConfirmed = false
             }
         });
     }
