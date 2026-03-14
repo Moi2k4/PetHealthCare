@@ -10,4 +10,5 @@ public class CheckoutDto
     public string? Note { get; set; }
     public string? PaymentMethod { get; set; }
     public string? VoucherCode { get; set; }
+    public string? ReturnBaseUrl { get; set; }
 }

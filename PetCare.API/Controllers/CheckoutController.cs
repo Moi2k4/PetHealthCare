@@ -1,7 +1,11 @@
 using System.Security.Claims;
+using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using PayOS;
+using PayOS.Models.V2.PaymentRequests;
+using PayOS.Models.Webhooks;
 using PetCare.Application.DTOs.Order;
 using PetCare.Domain.Entities;
 using PetCare.Infrastructure.Data;
@@ -14,10 +18,35 @@ namespace PetCare.API.Controllers;
 public class CheckoutController : ControllerBase
 {
     private readonly PetCareDbContext _context;
+    private readonly PayOSClient? _payOS;
+    private readonly bool _payOsConfigured;
+    private readonly string _fallbackReturnUrl;
+    private readonly string _fallbackCancelUrl;
 
-    public CheckoutController(PetCareDbContext context)
+    public CheckoutController(PetCareDbContext context, IConfiguration configuration)
     {
         _context = context;
+
+        var clientId = configuration["PayOS:ClientId"] ?? Environment.GetEnvironmentVariable("PAYOS_CLIENT_ID");
+        var apiKey = configuration["PayOS:ApiKey"] ?? Environment.GetEnvironmentVariable("PAYOS_API_KEY");
+        var checksumKey = configuration["PayOS:ChecksumKey"] ?? Environment.GetEnvironmentVariable("PAYOS_CHECKSUM_KEY");
+
+        _payOsConfigured = !string.IsNullOrWhiteSpace(clientId)
+            && !string.IsNullOrWhiteSpace(apiKey)
+            && !string.IsNullOrWhiteSpace(checksumKey);
+
+        if (_payOsConfigured)
+        {
+            _payOS = new PayOSClient(clientId!, apiKey!, checksumKey!);
+        }
+
+        _fallbackReturnUrl = configuration["PayOS:CheckoutReturnUrl"]
+            ?? configuration["PayOS:ReturnUrl"]
+            ?? "https://pettsuba.live/thanh-toan/thanh-cong";
+
+        _fallbackCancelUrl = configuration["PayOS:CheckoutCancelUrl"]
+            ?? configuration["PayOS:CancelUrl"]
+            ?? "https://pettsuba.live/thanh-toan";
     }
 
     [HttpGet("summary")]
@@ -76,12 +105,21 @@ public class CheckoutController : ControllerBase
         }
 
         var paymentMethod = (dto.PaymentMethod ?? "cod").Trim().ToLowerInvariant();
-        if (paymentMethod != "cod")
+        if (paymentMethod != "cod" && paymentMethod != "payos")
         {
             return BadRequest(new
             {
                 success = false,
-                message = "Only COD payment is currently supported for product checkout"
+                message = "Unsupported payment method"
+            });
+        }
+
+        if (paymentMethod == "payos" && (!_payOsConfigured || _payOS == null))
+        {
+            return BadRequest(new
+            {
+                success = false,
+                message = "PayOS is not configured on server"
             });
         }
 
@@ -136,7 +174,7 @@ public class CheckoutController : ControllerBase
             DiscountAmount = discountAmount,
             FinalAmount = finalAmount,
             PaymentMethod = paymentMethod,
-            PaymentStatus = "unpaid",
+            PaymentStatus = paymentMethod == "cod" ? "pending" : "unpaid",
             ShippingName = dto.ShippingName.Trim(),
             ShippingPhone = dto.ShippingPhone.Trim(),
             ShippingAddress = dto.ShippingAddress.Trim(),
@@ -170,13 +208,71 @@ public class CheckoutController : ControllerBase
             _context.Products.Update(cartItem.Product);
         }
 
+        long? orderCode = null;
+        string? paymentUrl = null;
+
+        if (paymentMethod == "payos")
+        {
+            orderCode = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+
+            var (returnUrl, cancelUrl) = BuildClientReturnUrls(dto.ReturnBaseUrl);
+            var amountVnd = decimal.ToInt32(Math.Round(finalAmount, MidpointRounding.AwayFromZero));
+
+            var paymentRequest = new CreatePaymentLinkRequest
+            {
+                OrderCode = orderCode.Value,
+                Amount = amountVnd,
+                Description = $"Don hang {order.OrderNumber}",
+                ReturnUrl = $"{returnUrl}?orderNumber={Uri.EscapeDataString(order.OrderNumber)}&amount={finalAmount}&method=payos",
+                CancelUrl = cancelUrl,
+                Items = cartItems.Select(ci => new PaymentLinkItem
+                {
+                    Name = ci.Product.ProductName,
+                    Quantity = ci.Quantity,
+                    Price = decimal.ToInt32(Math.Round(ci.Product.SalePrice ?? ci.Product.Price, MidpointRounding.AwayFromZero))
+                }).ToList()
+            };
+
+            var link = await _payOS!.PaymentRequests.CreateAsync(paymentRequest);
+            paymentUrl = link.CheckoutUrl;
+
+            var payment = new Payment
+            {
+                OrderId = order.Id,
+                UserId = userId,
+                PaymentMethod = "payos",
+                PaymentStatus = "pending",
+                Amount = finalAmount,
+                TransactionId = orderCode.ToString(),
+                CreatedAt = now,
+                UpdatedAt = now
+            };
+
+            await _context.Payments.AddAsync(payment);
+        }
+        else
+        {
+            var payment = new Payment
+            {
+                OrderId = order.Id,
+                UserId = userId,
+                PaymentMethod = "cod",
+                PaymentStatus = "pending",
+                Amount = finalAmount,
+                CreatedAt = now,
+                UpdatedAt = now
+            };
+
+            await _context.Payments.AddAsync(payment);
+        }
+
         _context.CartItems.RemoveRange(cartItems);
         await _context.SaveChangesAsync();
 
         return Ok(new
         {
             success = true,
-            message = "Order placed successfully",
+            message = paymentMethod == "payos" ? "Payment link created" : "Order placed successfully",
             data = new
             {
                 order.Id,
@@ -185,9 +281,103 @@ public class CheckoutController : ControllerBase
                 order.PaymentMethod,
                 order.PaymentStatus,
                 order.OrderStatus,
-                order.OrderedAt
+                order.OrderedAt,
+                paymentUrl,
+                orderCode
             }
         });
+    }
+
+    [AllowAnonymous]
+    [HttpPost("payos-webhook")]
+    public async Task<IActionResult> PayOsWebhook([FromBody] PayOsWebhookRequest webhook)
+    {
+        if (!_payOsConfigured || _payOS == null)
+        {
+            return Ok(new { success = false, message = "PayOS not configured" });
+        }
+
+        try
+        {
+            var sdkWebhook = new Webhook
+            {
+                Code = webhook.Code,
+                Description = webhook.Desc,
+                Success = webhook.Success,
+                Signature = webhook.Signature,
+                Data = webhook.Data == null ? null : new WebhookData
+                {
+                    OrderCode = webhook.Data.OrderCode,
+                    Amount = webhook.Data.Amount,
+                    Description = webhook.Data.Description,
+                    AccountNumber = webhook.Data.AccountNumber,
+                    Reference = webhook.Data.Reference,
+                    TransactionDateTime = webhook.Data.TransactionDateTime,
+                    Currency = webhook.Data.Currency,
+                    PaymentLinkId = webhook.Data.PaymentLinkId,
+                    Code = webhook.Data.Code,
+                    CounterAccountBankId = webhook.Data.CounterAccountBankId,
+                    CounterAccountBankName = webhook.Data.CounterAccountBankName,
+                    CounterAccountName = webhook.Data.CounterAccountName,
+                    CounterAccountNumber = webhook.Data.CounterAccountNumber,
+                    VirtualAccountName = webhook.Data.VirtualAccountName,
+                    VirtualAccountNumber = webhook.Data.VirtualAccountNumber
+                }
+            };
+
+            var verified = await _payOS.Webhooks.VerifyAsync(sdkWebhook);
+            var code = verified.OrderCode.ToString();
+
+            var payment = await _context.Payments
+                .Include(p => p.Order)
+                .FirstOrDefaultAsync(p => p.TransactionId == code && p.PaymentMethod == "payos");
+
+            if (payment == null)
+            {
+                return Ok(new { success = false, message = "Payment not found" });
+            }
+
+            payment.PaymentGatewayResponse = JsonSerializer.Serialize(webhook);
+            payment.UpdatedAt = DateTime.UtcNow;
+
+            if (verified.Code == "00" && webhook.Success)
+            {
+                payment.PaymentStatus = "completed";
+                payment.PaidAt = DateTime.UtcNow;
+                payment.Order.PaymentStatus = "paid";
+                payment.Order.OrderStatus = "confirmed";
+                payment.Order.UpdatedAt = DateTime.UtcNow;
+            }
+            else
+            {
+                payment.PaymentStatus = "failed";
+                payment.Order.PaymentStatus = "failed";
+                payment.Order.OrderStatus = "cancelled";
+                payment.Order.UpdatedAt = DateTime.UtcNow;
+            }
+
+            _context.Payments.Update(payment);
+            _context.Orders.Update(payment.Order);
+            await _context.SaveChangesAsync();
+
+            return Ok(new { success = true });
+        }
+        catch (Exception ex)
+        {
+            return Ok(new { success = false, message = ex.Message });
+        }
+    }
+
+    private (string returnUrl, string cancelUrl) BuildClientReturnUrls(string? returnBaseUrl)
+    {
+        if (Uri.TryCreate(returnBaseUrl, UriKind.Absolute, out var uri)
+            && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
+        {
+            var origin = $"{uri.Scheme}://{uri.Host}{(uri.IsDefaultPort ? string.Empty : $":" + uri.Port)}";
+            return ($"{origin}/thanh-toan/thanh-cong", $"{origin}/thanh-toan");
+        }
+
+        return (_fallbackReturnUrl, _fallbackCancelUrl);
     }
 
     private Guid GetUserId()
@@ -199,5 +389,33 @@ public class CheckoutController : ControllerBase
         }
 
         return userId;
+    }
+
+    public class PayOsWebhookRequest
+    {
+        public string Code { get; set; } = string.Empty;
+        public string Desc { get; set; } = string.Empty;
+        public bool Success { get; set; }
+        public string Signature { get; set; } = string.Empty;
+        public PayOsWebhookData? Data { get; set; }
+    }
+
+    public class PayOsWebhookData
+    {
+        public long OrderCode { get; set; }
+        public int Amount { get; set; }
+        public string Description { get; set; } = string.Empty;
+        public string? AccountNumber { get; set; }
+        public string? Reference { get; set; }
+        public string? TransactionDateTime { get; set; }
+        public string? Currency { get; set; }
+        public string PaymentLinkId { get; set; } = string.Empty;
+        public string? Code { get; set; }
+        public string? CounterAccountBankId { get; set; }
+        public string? CounterAccountBankName { get; set; }
+        public string? CounterAccountName { get; set; }
+        public string? CounterAccountNumber { get; set; }
+        public string? VirtualAccountName { get; set; }
+        public string? VirtualAccountNumber { get; set; }
     }
 }
