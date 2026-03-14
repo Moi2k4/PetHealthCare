@@ -73,24 +73,9 @@ public class SubscriptionService : ISubscriptionService
                     },
                     new()
                     {
-                        Name = "Pro",
-                        Description = "Theo doi suc khoe nang cao voi AI va goi y dinh duong.",
-                        Price = 99000,
-                        BillingCycle = "Month",
-                        IsActive = true,
-                        HasAIHealthTracking = true,
-                        HasVaccinationTracking = true,
-                        HasHealthReminders = true,
-                        HasAIRecommendations = true,
-                        HasNutritionalAnalysis = true,
-                        CreatedAt = now,
-                        UpdatedAt = now
-                    },
-                    new()
-                    {
-                        Name = "Premium",
-                        Description = "Day du tinh nang AI, phat hien som va ho tro uu tien.",
-                        Price = 249000,
+                        Name = "5K",
+                        Description = "Goi nang cao voi day du tinh nang chinh o muc phi 5.000 VND.",
+                        Price = 5000,
                         BillingCycle = "Month",
                         IsActive = true,
                         HasAIHealthTracking = true,
