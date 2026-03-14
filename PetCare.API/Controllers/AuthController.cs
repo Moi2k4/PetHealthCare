@@ -60,4 +60,18 @@ public class AuthController : ControllerBase
         var claims = User.Claims.Select(c => new { c.Type, c.Value });
         return Ok(claims);
     }
+
+    [HttpPost("google")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GoogleLogin([FromBody] GoogleLoginDto dto)
+    {
+        if (string.IsNullOrWhiteSpace(dto.IdToken))
+            return BadRequest(new { message = "IdToken is required" });
+
+        var result = await _authService.GoogleLoginAsync(dto.IdToken);
+        if (!result.Success)
+            return BadRequest(result);
+
+        return Ok(result);
+    }
 }

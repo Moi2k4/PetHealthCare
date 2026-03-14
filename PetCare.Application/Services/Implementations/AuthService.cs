@@ -2,6 +2,8 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using AutoMapper;
+using Google.Apis.Auth;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using PetCare.Application.Common;
@@ -21,13 +23,17 @@ public class AuthService : IAuthService
     private readonly IMapper _mapper;
     private readonly JwtSettings _jwtSettings;
     private readonly IEmailService _emailService;
+    private readonly string _googleClientId;
 
-    public AuthService(IUnitOfWork unitOfWork, IMapper mapper, IOptions<JwtSettings> jwtOptions, IEmailService emailService)
+    public AuthService(IUnitOfWork unitOfWork, IMapper mapper, IOptions<JwtSettings> jwtOptions, IEmailService emailService, IConfiguration configuration)
     {
         _unitOfWork = unitOfWork;
         _mapper = mapper;
         _jwtSettings = jwtOptions.Value;
         _emailService = emailService;
+        _googleClientId = configuration["Google:ClientId"]
+            ?? Environment.GetEnvironmentVariable("GOOGLE_CLIENT_ID")
+            ?? string.Empty;
     }
 
     public async Task<ServiceResult<AuthResponseDto>> RegisterAsync(RegisterUserDto registerDto)
@@ -179,5 +185,78 @@ public class AuthService : IAuthService
 
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
-}
 
+    public async Task<ServiceResult<AuthResponseDto>> GoogleLoginAsync(string idToken)
+    {
+        try
+        {
+            var settings = new GoogleJsonWebSignature.ValidationSettings
+            {
+                Audience = new[] { _googleClientId }
+            };
+
+            GoogleJsonWebSignature.Payload payload;
+            try
+            {
+                payload = await GoogleJsonWebSignature.ValidateAsync(idToken, settings);
+            }
+            catch (InvalidJwtException)
+            {
+                return ServiceResult<AuthResponseDto>.FailureResult("Invalid Google token");
+            }
+
+            var email = payload.Email;
+            var fullName = payload.Name ?? payload.Email;
+            var avatarUrl = payload.Picture;
+
+            var user = await _unitOfWork.Users.GetByEmailAsync(email);
+
+            if (user == null)
+            {
+                // Auto-register new Google user
+                var roleRepository = _unitOfWork.Repository<Role>();
+                var role = await roleRepository.FirstOrDefaultAsync(r => r.RoleName == "Customer")
+                    ?? new Role { RoleName = "Customer", Description = "Auto-generated role Customer" };
+
+                if (role.Id == Guid.Empty)
+                {
+                    await roleRepository.AddAsync(role);
+                    await _unitOfWork.SaveChangesAsync();
+                }
+
+                user = new User
+                {
+                    Email = email,
+                    FullName = fullName,
+                    AvatarUrl = avatarUrl,
+                    RoleId = role.Id,
+                    Role = role,
+                    PasswordHash = BCryptNet.HashPassword(Guid.NewGuid().ToString()) // random unusable password
+                };
+
+                await _unitOfWork.Users.AddAsync(user);
+                await _unitOfWork.SaveChangesAsync();
+
+                user = await _unitOfWork.Users.GetByEmailAsync(email);
+                if (user == null)
+                    return ServiceResult<AuthResponseDto>.FailureResult("Failed to create user");
+
+                _ = Task.Run(async () =>
+                {
+                    try { await _emailService.SendWelcomeEmailAsync(user.Email, user.FullName); }
+                    catch { }
+                });
+            }
+
+            if (!user.IsActive)
+                return ServiceResult<AuthResponseDto>.FailureResult("Account is inactive");
+
+            var response = await BuildAuthResponseAsync(user);
+            return ServiceResult<AuthResponseDto>.SuccessResult(response, "Google login successful");
+        }
+        catch (Exception ex)
+        {
+            return ServiceResult<AuthResponseDto>.FailureResult($"Google login failed: {ex.Message}");
+        }
+    }
+}
