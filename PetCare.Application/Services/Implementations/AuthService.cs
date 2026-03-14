@@ -31,9 +31,10 @@ public class AuthService : IAuthService
         _mapper = mapper;
         _jwtSettings = jwtOptions.Value;
         _emailService = emailService;
-        _googleClientId = configuration["Google:ClientId"]
-            ?? Environment.GetEnvironmentVariable("GOOGLE_CLIENT_ID")
-            ?? string.Empty;
+        var clientIdFromConfig = configuration["Google:ClientId"];
+        _googleClientId = string.IsNullOrEmpty(clientIdFromConfig)
+            ? (Environment.GetEnvironmentVariable("GOOGLE_CLIENT_ID") ?? string.Empty)
+            : clientIdFromConfig;
     }
 
     public async Task<ServiceResult<AuthResponseDto>> RegisterAsync(RegisterUserDto registerDto)
