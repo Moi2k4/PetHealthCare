@@ -299,29 +299,31 @@ public class CheckoutController : ControllerBase
 
         try
         {
+            var webhookData = webhook.Data;
+
             var sdkWebhook = new Webhook
             {
                 Code = webhook.Code,
                 Description = webhook.Desc,
                 Success = webhook.Success,
                 Signature = webhook.Signature,
-                Data = webhook.Data == null ? null : new WebhookData
+                Data = new WebhookData
                 {
-                    OrderCode = webhook.Data.OrderCode,
-                    Amount = webhook.Data.Amount,
-                    Description = webhook.Data.Description,
-                    AccountNumber = webhook.Data.AccountNumber,
-                    Reference = webhook.Data.Reference,
-                    TransactionDateTime = webhook.Data.TransactionDateTime,
-                    Currency = webhook.Data.Currency,
-                    PaymentLinkId = webhook.Data.PaymentLinkId,
-                    Code = webhook.Data.Code,
-                    CounterAccountBankId = webhook.Data.CounterAccountBankId,
-                    CounterAccountBankName = webhook.Data.CounterAccountBankName,
-                    CounterAccountName = webhook.Data.CounterAccountName,
-                    CounterAccountNumber = webhook.Data.CounterAccountNumber,
-                    VirtualAccountName = webhook.Data.VirtualAccountName,
-                    VirtualAccountNumber = webhook.Data.VirtualAccountNumber
+                    OrderCode = webhookData?.OrderCode ?? 0,
+                    Amount = webhookData?.Amount ?? 0,
+                    Description = webhookData?.Description ?? string.Empty,
+                    AccountNumber = webhookData?.AccountNumber ?? string.Empty,
+                    Reference = webhookData?.Reference ?? string.Empty,
+                    TransactionDateTime = webhookData?.TransactionDateTime ?? string.Empty,
+                    Currency = webhookData?.Currency ?? string.Empty,
+                    PaymentLinkId = webhookData?.PaymentLinkId ?? string.Empty,
+                    Code = webhookData?.Code ?? string.Empty,
+                    CounterAccountBankId = webhookData?.CounterAccountBankId ?? string.Empty,
+                    CounterAccountBankName = webhookData?.CounterAccountBankName ?? string.Empty,
+                    CounterAccountName = webhookData?.CounterAccountName ?? string.Empty,
+                    CounterAccountNumber = webhookData?.CounterAccountNumber ?? string.Empty,
+                    VirtualAccountName = webhookData?.VirtualAccountName ?? string.Empty,
+                    VirtualAccountNumber = webhookData?.VirtualAccountNumber ?? string.Empty
                 }
             };
 
