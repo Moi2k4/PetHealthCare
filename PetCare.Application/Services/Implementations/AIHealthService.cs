@@ -26,8 +26,9 @@ public class AIHealthService : IAIHealthService
     {
         _unitOfWork = unitOfWork;
         _httpClient = httpClientFactory.CreateClient("GeminiClient");
-        _apiKey = configuration["GoogleAI:ApiKey"]
-            ?? Environment.GetEnvironmentVariable("GOOGLE_AI_API_KEY")
+        _apiKey = GetFirstNonEmpty(
+            configuration["GoogleAI:ApiKey"],
+            Environment.GetEnvironmentVariable("GOOGLE_AI_API_KEY"))
             ?? throw new InvalidOperationException("Google AI API key is not configured.");
         _model = configuration["GoogleAI:Model"] ?? "gemini-1.5-flash";
     }
@@ -377,4 +378,17 @@ public class AIHealthService : IAIHealthService
         ReviewNotes = a.ReviewNotes,
         CreatedAt = a.CreatedAt
     };
+
+    private static string? GetFirstNonEmpty(params string?[] values)
+    {
+        foreach (var value in values)
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                return value;
+            }
+        }
+
+        return null;
+    }
 }
