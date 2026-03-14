@@ -18,6 +18,7 @@ public class AIHealthService : IAIHealthService
     private readonly HttpClient _httpClient;
     private readonly string _apiKey;
     private readonly string _model;
+    private static readonly string[] FallbackModels = { "gemini-2.5-flash", "gemini-flash-latest" };
 
     private const string GeminiBaseUrl =
         "https://generativelanguage.googleapis.com/v1beta/models/{0}:generateContent?key={1}";
@@ -30,7 +31,9 @@ public class AIHealthService : IAIHealthService
             configuration["GoogleAI:ApiKey"],
             Environment.GetEnvironmentVariable("GOOGLE_AI_API_KEY"))
             ?? throw new InvalidOperationException("Google AI API key is not configured.");
-        _model = configuration["GoogleAI:Model"] ?? "gemini-1.5-flash";
+        _model = GetFirstNonEmpty(
+            configuration["GoogleAI:Model"],
+            Environment.GetEnvironmentVariable("GOOGLE_AI_MODEL")) ?? "gemini-2.5-flash";
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -90,7 +93,7 @@ public class AIHealthService : IAIHealthService
             var prompt = BuildPrompt(pet, healthRecords, request);
 
             // Call Gemini
-            var (aiText, tokensUsed) = await CallGeminiAsync(prompt);
+            var (aiText, tokensUsed, usedModel) = await CallGeminiAsync(prompt);
 
             // Parse sections from the AI response
             var recommendations = ExtractSection(aiText, "Recommendations");
@@ -112,7 +115,7 @@ public class AIHealthService : IAIHealthService
                 Recommendations = recommendations,
                 ConfidenceScore = confidenceScore,
                 TokensUsed = tokensUsed,
-                AIModel = _model
+                AIModel = usedModel
             };
 
             await _unitOfWork.Repository<AIHealthAnalysis>().AddAsync(analysis);
@@ -277,10 +280,8 @@ public class AIHealthService : IAIHealthService
         return sb.ToString();
     }
 
-    private async Task<(string Text, int TokensUsed)> CallGeminiAsync(string prompt)
+    private async Task<(string Text, int TokensUsed, string UsedModel)> CallGeminiAsync(string prompt)
     {
-        var url = string.Format(GeminiBaseUrl, _model, _apiKey);
-
         var body = new
         {
             contents = new[]
@@ -300,32 +301,56 @@ public class AIHealthService : IAIHealthService
             }
         };
 
-        using var request = new HttpRequestMessage(HttpMethod.Post, url);
-        request.Content = new StringContent(
-            JsonSerializer.Serialize(body),
-            Encoding.UTF8,
-            "application/json");
+        var modelsToTry = new List<string> { _model };
+        modelsToTry.AddRange(FallbackModels.Where(model => !string.Equals(model, _model, StringComparison.OrdinalIgnoreCase)));
 
-        var response = await _httpClient.SendAsync(request);
-        response.EnsureSuccessStatusCode();
+        HttpResponseMessage? lastResponse = null;
 
-        var json = await response.Content.ReadFromJsonAsync<JsonElement>();
-
-        var text = json
-            .GetProperty("candidates")[0]
-            .GetProperty("content")
-            .GetProperty("parts")[0]
-            .GetProperty("text")
-            .GetString() ?? string.Empty;
-
-        int tokensUsed = 0;
-        if (json.TryGetProperty("usageMetadata", out var usage) &&
-            usage.TryGetProperty("totalTokenCount", out var tokenEl))
+        foreach (var model in modelsToTry)
         {
-            tokensUsed = tokenEl.GetInt32();
+            var url = string.Format(GeminiBaseUrl, model, _apiKey);
+
+            using var request = new HttpRequestMessage(HttpMethod.Post, url);
+            request.Content = new StringContent(
+                JsonSerializer.Serialize(body),
+                Encoding.UTF8,
+                "application/json");
+
+            var response = await _httpClient.SendAsync(request);
+
+            if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                lastResponse = response;
+                continue;
+            }
+
+            response.EnsureSuccessStatusCode();
+
+            var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+            var text = json
+                .GetProperty("candidates")[0]
+                .GetProperty("content")
+                .GetProperty("parts")[0]
+                .GetProperty("text")
+                .GetString() ?? string.Empty;
+
+            int tokensUsed = 0;
+            if (json.TryGetProperty("usageMetadata", out var usage) &&
+                usage.TryGetProperty("totalTokenCount", out var tokenEl))
+            {
+                tokensUsed = tokenEl.GetInt32();
+            }
+
+            return (text, tokensUsed, model);
         }
 
-        return (text, tokensUsed);
+        if (lastResponse != null)
+        {
+            lastResponse.EnsureSuccessStatusCode();
+        }
+
+        throw new InvalidOperationException("No Gemini model could be used for analysis.");
     }
 
     private static string? ExtractSection(string text, string sectionName)
