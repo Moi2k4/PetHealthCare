@@ -67,3 +67,25 @@ public class AppointmentResponseDto
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
 }
+
+public class UpdateAppointmentStatusDto
+{
+    [Required]
+    [StringLength(50)]
+    public string Status { get; set; } = string.Empty;
+
+    public string? MedicalNotes { get; set; }
+
+    public string? CancellationReason { get; set; }
+}
+
+public class ServiceListItemDto
+{
+    public Guid Id { get; set; }
+    public string ServiceName { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public decimal Price { get; set; }
+    public int DurationMinutes { get; set; }
+    public bool IsHomeService { get; set; }
+    public string? CategoryName { get; set; }
+}

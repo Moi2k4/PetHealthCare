@@ -7,7 +7,7 @@ namespace PetCare.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Roles = "admin")]
+[Authorize(Roles = "Admin,admin")]
 public class AdminDashboardController : ControllerBase
 {
     private readonly PetCareDbContext _context;

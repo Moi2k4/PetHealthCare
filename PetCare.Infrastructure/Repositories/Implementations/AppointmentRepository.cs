@@ -57,4 +57,24 @@ public class AppointmentRepository : GenericRepository<Appointment>, IAppointmen
             .OrderBy(a => a.StartTime)
             .ToListAsync();
     }
+
+    public async Task<IEnumerable<Appointment>> GetAllWithDetailsAsync(string? status, DateTime? date)
+    {
+        var query = _dbSet
+            .Include(a => a.User)
+            .Include(a => a.Pet)
+            .Include(a => a.Service)
+            .Include(a => a.Branch)
+            .Include(a => a.AssignedStaff)
+            .Include(a => a.StatusHistory)
+            .AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(status))
+            query = query.Where(a => a.AppointmentStatus == status);
+
+        if (date.HasValue)
+            query = query.Where(a => a.AppointmentDate.Date == date.Value.Date);
+
+        return await query.OrderByDescending(a => a.AppointmentDate).ToListAsync();
+    }
 }

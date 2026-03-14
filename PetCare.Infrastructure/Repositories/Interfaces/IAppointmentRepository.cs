@@ -8,4 +8,5 @@ public interface IAppointmentRepository : IGenericRepository<Appointment>
     Task<IEnumerable<Appointment>> GetAppointmentsByDateAsync(DateTime date);
     Task<Appointment?> GetAppointmentWithDetailsAsync(Guid appointmentId);
     Task<IEnumerable<Appointment>> GetAppointmentsByStaffAsync(Guid staffId, DateTime date);
+    Task<IEnumerable<Appointment>> GetAllWithDetailsAsync(string? status, DateTime? date);
 }

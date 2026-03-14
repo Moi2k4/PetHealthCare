@@ -109,6 +109,7 @@ builder.Services.AddScoped<IAIHealthService, AIHealthService>();
 builder.Services.AddScoped<ISubscriptionService, SubscriptionService>();
 builder.Services.AddScoped<IBlogService, BlogService>();
 builder.Services.AddScoped<IReviewService, ReviewService>();
+builder.Services.AddScoped<IAppointmentService, AppointmentService>();
 
 // Resend email service
 var resendApiKey = Environment.GetEnvironmentVariable("RESEND_API_KEY")
@@ -238,6 +239,28 @@ builder.Services.AddCors(options =>
 });
 
 var app = builder.Build();
+
+// Ensure core roles exist so role assignment and authorization policies work.
+using (var scope = app.Services.CreateScope())
+{
+    var context = scope.ServiceProvider.GetRequiredService<PetCareDbContext>();
+    var requiredRoles = new[] { "Customer", "Doctor" };
+
+    foreach (var roleName in requiredRoles)
+    {
+        var exists = await context.Roles.AnyAsync(r => r.RoleName == roleName);
+        if (!exists)
+        {
+            context.Roles.Add(new PetCare.Domain.Entities.Role
+            {
+                RoleName = roleName,
+                Description = $"Auto-generated role {roleName}"
+            });
+        }
+    }
+
+    await context.SaveChangesAsync();
+}
 
 // Seed database on startup (comment out after first successful run)
 // Uncomment only when you need to re-seed the database
