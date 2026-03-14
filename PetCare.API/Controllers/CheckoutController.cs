@@ -27,9 +27,17 @@ public class CheckoutController : ControllerBase
     {
         _context = context;
 
-        var clientId = configuration["PayOS:ClientId"] ?? Environment.GetEnvironmentVariable("PAYOS_CLIENT_ID");
-        var apiKey = configuration["PayOS:ApiKey"] ?? Environment.GetEnvironmentVariable("PAYOS_API_KEY");
-        var checksumKey = configuration["PayOS:ChecksumKey"] ?? Environment.GetEnvironmentVariable("PAYOS_CHECKSUM_KEY");
+        var clientId = GetFirstNonEmpty(
+            configuration["PayOS:ClientId"],
+            Environment.GetEnvironmentVariable("PAYOS_CLIENT_ID"));
+
+        var apiKey = GetFirstNonEmpty(
+            configuration["PayOS:ApiKey"],
+            Environment.GetEnvironmentVariable("PAYOS_API_KEY"));
+
+        var checksumKey = GetFirstNonEmpty(
+            configuration["PayOS:ChecksumKey"],
+            Environment.GetEnvironmentVariable("PAYOS_CHECKSUM_KEY"));
 
         _payOsConfigured = !string.IsNullOrWhiteSpace(clientId)
             && !string.IsNullOrWhiteSpace(apiKey)
@@ -380,6 +388,19 @@ public class CheckoutController : ControllerBase
         }
 
         return (_fallbackReturnUrl, _fallbackCancelUrl);
+    }
+
+    private static string? GetFirstNonEmpty(params string?[] values)
+    {
+        foreach (var value in values)
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                return value;
+            }
+        }
+
+        return null;
     }
 
     private Guid GetUserId()

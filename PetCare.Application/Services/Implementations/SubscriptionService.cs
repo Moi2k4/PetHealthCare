@@ -22,19 +22,26 @@ public class SubscriptionService : ISubscriptionService
     {
         _unitOfWork = unitOfWork;
 
-        var clientId    = configuration["PayOS:ClientId"]    ?? Environment.GetEnvironmentVariable("PAYOS_CLIENT_ID")    ?? throw new InvalidOperationException("PayOS ClientId not configured.");
-        var apiKey      = configuration["PayOS:ApiKey"]      ?? Environment.GetEnvironmentVariable("PAYOS_API_KEY")      ?? throw new InvalidOperationException("PayOS ApiKey not configured.");
-        var checksumKey = configuration["PayOS:ChecksumKey"] ?? Environment.GetEnvironmentVariable("PAYOS_CHECKSUM_KEY") ?? throw new InvalidOperationException("PayOS ChecksumKey not configured.");
+        var clientId = GetFirstNonEmpty(
+            configuration["PayOS:ClientId"],
+            Environment.GetEnvironmentVariable("PAYOS_CLIENT_ID"))
+            ?? throw new InvalidOperationException("PayOS ClientId not configured.");
+
+        var apiKey = GetFirstNonEmpty(
+            configuration["PayOS:ApiKey"],
+            Environment.GetEnvironmentVariable("PAYOS_API_KEY"))
+            ?? throw new InvalidOperationException("PayOS ApiKey not configured.");
+
+        var checksumKey = GetFirstNonEmpty(
+            configuration["PayOS:ChecksumKey"],
+            Environment.GetEnvironmentVariable("PAYOS_CHECKSUM_KEY"))
+            ?? throw new InvalidOperationException("PayOS ChecksumKey not configured.");
 
         _payOS = new PayOSClient(clientId, apiKey, checksumKey);
 
         _returnUrl = configuration["PayOS:ReturnUrl"] ?? "https://yourfrontend.com/subscription/success";
         _cancelUrl = configuration["PayOS:CancelUrl"] ?? "https://yourfrontend.com/subscription/cancel";
     }
-
-    // ──────────────────────────────────────────────────────────────────────────
-    // Get available packages
-    // ──────────────────────────────────────────────────────────────────────────
 
     public async Task<ServiceResult<IEnumerable<SubscriptionPackageDto>>> GetPackagesAsync()
     {
@@ -56,10 +63,6 @@ public class SubscriptionService : ISubscriptionService
         }
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // Create a PayOS payment link
-    // ──────────────────────────────────────────────────────────────────────────
-
     public async Task<ServiceResult<SubscriptionPaymentLinkDto>> CreatePaymentLinkAsync(
         CreateSubscriptionPaymentDto dto, Guid userId)
     {
@@ -71,37 +74,34 @@ public class SubscriptionService : ISubscriptionService
             if (package == null || !package.IsActive)
                 return ServiceResult<SubscriptionPaymentLinkDto>.FailureResult("Subscription package not found.");
 
-            // Free package – activate immediately without PayOS
             if (package.Price == 0)
             {
                 var freeSub = new UserSubscription
                 {
-                    UserId                = userId,
+                    UserId = userId,
                     SubscriptionPackageId = package.Id,
-                    StartDate             = DateTime.UtcNow,
-                    EndDate               = DateTime.UtcNow.AddMonths(1),
-                    NextBillingDate       = DateTime.UtcNow.AddMonths(1),
-                    IsActive              = true,
-                    Status                = "Active",
-                    AmountPaid            = 0,
-                    PaymentMethod         = "free"
+                    StartDate = DateTime.UtcNow,
+                    EndDate = DateTime.UtcNow.AddMonths(1),
+                    NextBillingDate = DateTime.UtcNow.AddMonths(1),
+                    IsActive = true,
+                    Status = "Active",
+                    AmountPaid = 0,
+                    PaymentMethod = "free"
                 };
                 await _unitOfWork.Repository<UserSubscription>().AddAsync(freeSub);
                 await _unitOfWork.SaveChangesAsync();
 
                 return ServiceResult<SubscriptionPaymentLinkDto>.SuccessResult(new SubscriptionPaymentLinkDto
                 {
-                    PaymentUrl            = string.Empty,
-                    OrderCode             = 0,
-                    QrCode                = string.Empty,
+                    PaymentUrl = string.Empty,
+                    OrderCode = 0,
+                    QrCode = string.Empty,
                     PendingSubscriptionId = freeSub.Id
                 });
             }
 
-            // Use Unix timestamp (seconds) as PayOS order code – must be a unique long
             var orderCode = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
-            // Create a pending UserSubscription so we can link it on webhook
             var pendingSubscription = new UserSubscription
             {
                 UserId = userId,
@@ -112,23 +112,22 @@ public class SubscriptionService : ISubscriptionService
                 Status = "Pending",
                 AmountPaid = package.Price,
                 PaymentMethod = "payos",
-                TransactionId = orderCode.ToString()  // store order code for webhook lookup
+                TransactionId = orderCode.ToString()
             };
 
             await _unitOfWork.Repository<UserSubscription>().AddAsync(pendingSubscription);
             await _unitOfWork.SaveChangesAsync();
 
-            // Amount must be in VND (integer)
             var amountVnd = (int)Math.Round(package.Price);
 
             var paymentRequest = new CreatePaymentLinkRequest
             {
-                OrderCode   = orderCode,
-                Amount      = amountVnd,
+                OrderCode = orderCode,
+                Amount = amountVnd,
                 Description = $"{package.BillingCycle} - {package.Name}",
-                ReturnUrl   = _returnUrl,
-                CancelUrl   = _cancelUrl,
-                Items       = new List<PaymentLinkItem>
+                ReturnUrl = _returnUrl,
+                CancelUrl = _cancelUrl,
+                Items = new List<PaymentLinkItem>
                 {
                     new PaymentLinkItem { Name = package.Name, Quantity = 1, Price = amountVnd }
                 }
@@ -138,9 +137,9 @@ public class SubscriptionService : ISubscriptionService
 
             return ServiceResult<SubscriptionPaymentLinkDto>.SuccessResult(new SubscriptionPaymentLinkDto
             {
-                PaymentUrl            = link.CheckoutUrl,
-                OrderCode             = orderCode,
-                QrCode                = link.QrCode,
+                PaymentUrl = link.CheckoutUrl,
+                OrderCode = orderCode,
+                QrCode = link.QrCode,
                 PendingSubscriptionId = pendingSubscription.Id
             });
         }
@@ -151,47 +150,40 @@ public class SubscriptionService : ISubscriptionService
         }
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // Handle PayOS webhook
-    // ──────────────────────────────────────────────────────────────────────────
-
     public async Task<ServiceResult<bool>> HandlePayOSWebhookAsync(PayOSWebhookDto webhook)
     {
         try
         {
-            // Verify signature using the SDK
             var sdkWebhook = new Webhook
             {
-                Code        = webhook.Code,
+                Code = webhook.Code,
                 Description = webhook.Desc,
-                Success     = webhook.Success,
-                Signature   = webhook.Signature,
-                Data      = webhook.Data == null ? null : new WebhookData
+                Success = webhook.Success,
+                Signature = webhook.Signature,
+                Data = webhook.Data == null ? null : new WebhookData
                 {
-                    OrderCode              = webhook.Data.OrderCode,
-                    Amount                 = webhook.Data.Amount,
-                    Description            = webhook.Data.Description,
-                    AccountNumber          = webhook.Data.AccountNumber,
-                    Reference              = webhook.Data.Reference,
-                    TransactionDateTime    = webhook.Data.TransactionDateTime,
-                    Currency               = webhook.Data.Currency,
-                    PaymentLinkId          = webhook.Data.PaymentLinkId,
-                    Code                   = webhook.Data.Code,
-                    CounterAccountBankId   = webhook.Data.CounterAccountBankId,
+                    OrderCode = webhook.Data.OrderCode,
+                    Amount = webhook.Data.Amount,
+                    Description = webhook.Data.Description,
+                    AccountNumber = webhook.Data.AccountNumber,
+                    Reference = webhook.Data.Reference,
+                    TransactionDateTime = webhook.Data.TransactionDateTime,
+                    Currency = webhook.Data.Currency,
+                    PaymentLinkId = webhook.Data.PaymentLinkId,
+                    Code = webhook.Data.Code,
+                    CounterAccountBankId = webhook.Data.CounterAccountBankId,
                     CounterAccountBankName = webhook.Data.CounterAccountBankName,
-                    CounterAccountName     = webhook.Data.CounterAccountName,
-                    CounterAccountNumber   = webhook.Data.CounterAccountNumber,
-                    VirtualAccountName     = webhook.Data.VirtualAccountName,
-                    VirtualAccountNumber   = webhook.Data.VirtualAccountNumber
+                    CounterAccountName = webhook.Data.CounterAccountName,
+                    CounterAccountNumber = webhook.Data.CounterAccountNumber,
+                    VirtualAccountName = webhook.Data.VirtualAccountName,
+                    VirtualAccountNumber = webhook.Data.VirtualAccountNumber
                 }
             };
 
-            // VerifyAsync throws if the signature is invalid – do NOT activate on bad signatures
             var verified = await _payOS.Webhooks.VerifyAsync(sdkWebhook);
 
-            // Only activate when payment actually succeeded ("00" = success)
             if (verified.Code != "00" || !webhook.Success)
-                return ServiceResult<bool>.SuccessResult(false); // not an error, just not a success payment
+                return ServiceResult<bool>.SuccessResult(false);
 
             var orderCode = verified.OrderCode.ToString();
 
@@ -202,11 +194,10 @@ public class SubscriptionService : ISubscriptionService
             if (subscription == null)
                 return ServiceResult<bool>.FailureResult("Pending subscription not found for this order.");
 
-            // Activate
-            subscription.IsActive      = true;
-            subscription.Status        = "Active";
-            subscription.StartDate     = DateTime.UtcNow;
-            subscription.EndDate       = subscription.SubscriptionPackage.BillingCycle == "Year"
+            subscription.IsActive = true;
+            subscription.Status = "Active";
+            subscription.StartDate = DateTime.UtcNow;
+            subscription.EndDate = subscription.SubscriptionPackage.BillingCycle == "Year"
                 ? DateTime.UtcNow.AddYears(1)
                 : DateTime.UtcNow.AddMonths(1);
             subscription.NextBillingDate = subscription.EndDate;
@@ -221,10 +212,6 @@ public class SubscriptionService : ISubscriptionService
             return ServiceResult<bool>.FailureResult($"Webhook processing error: {ex.Message}");
         }
     }
-
-    // ──────────────────────────────────────────────────────────────────────────
-    // Get current user subscription
-    // ──────────────────────────────────────────────────────────────────────────
 
     public async Task<ServiceResult<UserSubscriptionDto?>> GetMySubscriptionAsync(Guid userId)
     {
@@ -248,10 +235,6 @@ public class SubscriptionService : ISubscriptionService
         }
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // Cancel subscription
-    // ──────────────────────────────────────────────────────────────────────────
-
     public async Task<ServiceResult<bool>> CancelSubscriptionAsync(Guid userId)
     {
         try
@@ -264,7 +247,7 @@ public class SubscriptionService : ISubscriptionService
                 return ServiceResult<bool>.FailureResult("No active subscription found.");
 
             sub.IsActive = false;
-            sub.Status   = "Cancelled";
+            sub.Status = "Cancelled";
 
             await _unitOfWork.Repository<UserSubscription>().UpdateAsync(sub);
             await _unitOfWork.SaveChangesAsync();
@@ -277,41 +260,50 @@ public class SubscriptionService : ISubscriptionService
         }
     }
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // Mapping helpers
-    // ──────────────────────────────────────────────────────────────────────────
-
     private static SubscriptionPackageDto MapToPackageDto(SubscriptionPackage p) => new()
     {
-        Id           = p.Id,
-        Name         = p.Name,
-        Description  = p.Description,
-        Price        = p.Price,
+        Id = p.Id,
+        Name = p.Name,
+        Description = p.Description,
+        Price = p.Price,
         BillingCycle = p.BillingCycle,
-        IsActive     = p.IsActive,
-        Features     = new Dictionary<string, bool>
+        IsActive = p.IsActive,
+        Features = new Dictionary<string, bool>
         {
-            ["AIHealthTracking"]      = p.HasAIHealthTracking,
-            ["VaccinationTracking"]   = p.HasVaccinationTracking,
-            ["HealthReminders"]       = p.HasHealthReminders,
-            ["AIRecommendations"]     = p.HasAIRecommendations,
-            ["NutritionalAnalysis"]   = p.HasNutritionalAnalysis,
+            ["AIHealthTracking"] = p.HasAIHealthTracking,
+            ["VaccinationTracking"] = p.HasVaccinationTracking,
+            ["HealthReminders"] = p.HasHealthReminders,
+            ["AIRecommendations"] = p.HasAIRecommendations,
+            ["NutritionalAnalysis"] = p.HasNutritionalAnalysis,
             ["EarlyDiseaseDetection"] = p.HasEarlyDiseaseDetection,
-            ["PrioritySupport"]       = p.HasPrioritySupport
+            ["PrioritySupport"] = p.HasPrioritySupport
         }
     };
 
     private static UserSubscriptionDto MapToUserSubDto(UserSubscription s) => new()
     {
-        Id                    = s.Id,
-        UserId                = s.UserId,
+        Id = s.Id,
+        UserId = s.UserId,
         SubscriptionPackageId = s.SubscriptionPackageId,
-        PackageName           = s.SubscriptionPackage?.Name ?? string.Empty,
-        StartDate             = s.StartDate,
-        EndDate               = s.EndDate,
-        IsActive              = s.IsActive,
-        Status                = s.Status,
-        NextBillingDate       = s.NextBillingDate,
-        AmountPaid            = s.AmountPaid
+        PackageName = s.SubscriptionPackage?.Name ?? string.Empty,
+        StartDate = s.StartDate,
+        EndDate = s.EndDate,
+        IsActive = s.IsActive,
+        Status = s.Status,
+        NextBillingDate = s.NextBillingDate,
+        AmountPaid = s.AmountPaid
     };
+
+    private static string? GetFirstNonEmpty(params string?[] values)
+    {
+        foreach (var value in values)
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                return value;
+            }
+        }
+
+        return null;
+    }
 }
