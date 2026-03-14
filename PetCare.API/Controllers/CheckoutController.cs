@@ -172,6 +172,15 @@ public class CheckoutController : ControllerBase
         const decimal discountAmount = 0m;
         var finalAmount = totalAmount + shippingFee - discountAmount;
 
+        if (paymentMethod == "payos" && finalAmount <= 0)
+        {
+            return BadRequest(new
+            {
+                success = false,
+                message = "Final amount must be greater than 0 for PayOS payment"
+            });
+        }
+
         var order = new Order
         {
             UserId = userId,
@@ -224,25 +233,37 @@ public class CheckoutController : ControllerBase
             orderCode = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
             var (returnUrl, cancelUrl) = BuildClientReturnUrls(dto.ReturnBaseUrl);
-            var amountVnd = decimal.ToInt32(Math.Round(finalAmount, MidpointRounding.AwayFromZero));
+            var amountVnd = Math.Max(1, decimal.ToInt32(decimal.Ceiling(finalAmount)));
+            var payOsDescription = BuildPayOsDescription(order.OrderNumber);
 
             var paymentRequest = new CreatePaymentLinkRequest
             {
                 OrderCode = orderCode.Value,
                 Amount = amountVnd,
-                Description = $"Don hang {order.OrderNumber}",
+                Description = payOsDescription,
                 ReturnUrl = $"{returnUrl}?orderNumber={Uri.EscapeDataString(order.OrderNumber)}&amount={finalAmount}&method=payos",
                 CancelUrl = cancelUrl,
                 Items = cartItems.Select(ci => new PaymentLinkItem
                 {
                     Name = ci.Product.ProductName,
                     Quantity = ci.Quantity,
-                    Price = decimal.ToInt32(Math.Round(ci.Product.SalePrice ?? ci.Product.Price, MidpointRounding.AwayFromZero))
+                    Price = Math.Max(1, decimal.ToInt32(decimal.Ceiling(ci.Product.SalePrice ?? ci.Product.Price)))
                 }).ToList()
             };
 
-            var link = await _payOS!.PaymentRequests.CreateAsync(paymentRequest);
-            paymentUrl = link.CheckoutUrl;
+            try
+            {
+                var link = await _payOS!.PaymentRequests.CreateAsync(paymentRequest);
+                paymentUrl = link.CheckoutUrl;
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new
+                {
+                    success = false,
+                    message = $"PayOS error: {ex.Message}"
+                });
+            }
 
             var payment = new Payment
             {
@@ -401,6 +422,14 @@ public class CheckoutController : ControllerBase
         }
 
         return null;
+    }
+
+    private static string BuildPayOsDescription(string orderNumber)
+    {
+        // PayOS requires max 25 characters for description.
+        var compactOrder = orderNumber.Replace("ORD", "DH", StringComparison.OrdinalIgnoreCase);
+        var raw = $"DH {compactOrder}";
+        return raw.Length <= 25 ? raw : raw[..25];
     }
 
     private Guid GetUserId()
