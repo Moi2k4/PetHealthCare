@@ -1,8 +1,10 @@
 using System.Text;
+using System.IdentityModel.Tokens.Jwt;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using PetCare.API.Security;
 using PetCare.Application.Common;
 using PetCare.Application.Services;
 using PetCare.Infrastructure.Data;
@@ -34,6 +36,8 @@ builder.Configuration.AddEnvironmentVariables();
 
 // Add services to the container
 builder.Services.AddControllers();
+builder.Services.AddMemoryCache();
+builder.Services.AddSingleton<ITokenBlacklistService, TokenBlacklistService>();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
@@ -207,6 +211,28 @@ builder.Services.AddAuthentication(options =>
             ValidIssuer = jwtIssuer,
             ValidAudience = jwtAudience,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
+        };
+
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = context =>
+            {
+                var blacklist = context.HttpContext.RequestServices.GetRequiredService<ITokenBlacklistService>();
+
+                var authHeader = context.Request.Headers.Authorization.ToString();
+                var rawToken = authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
+                    ? authHeader[7..].Trim()
+                    : null;
+
+                var jti = context.Principal?.FindFirst(JwtRegisteredClaimNames.Jti)?.Value;
+
+                if (blacklist.IsBlacklisted(rawToken, jti))
+                {
+                    context.Fail("Token has been revoked");
+                }
+
+                return Task.CompletedTask;
+            }
         };
     });
 
