@@ -47,11 +47,77 @@ public class SubscriptionService : ISubscriptionService
     {
         try
         {
-            var packages = await _unitOfWork.Repository<SubscriptionPackage>()
+            var packageRepo = _unitOfWork.Repository<SubscriptionPackage>();
+
+            var packages = await packageRepo
                 .QueryWithIncludes()
                 .Where(p => p.IsActive)
                 .OrderBy(p => p.Price)
                 .ToListAsync();
+
+            if (packages.Count == 0)
+            {
+                var now = DateTime.UtcNow;
+                var defaults = new List<SubscriptionPackage>
+                {
+                    new()
+                    {
+                        Name = "Free",
+                        Description = "Goi co ban de bat dau cham soc thu cung.",
+                        Price = 0,
+                        BillingCycle = "Month",
+                        IsActive = true,
+                        HasHealthReminders = true,
+                        CreatedAt = now,
+                        UpdatedAt = now
+                    },
+                    new()
+                    {
+                        Name = "Pro",
+                        Description = "Theo doi suc khoe nang cao voi AI va goi y dinh duong.",
+                        Price = 99000,
+                        BillingCycle = "Month",
+                        IsActive = true,
+                        HasAIHealthTracking = true,
+                        HasVaccinationTracking = true,
+                        HasHealthReminders = true,
+                        HasAIRecommendations = true,
+                        HasNutritionalAnalysis = true,
+                        CreatedAt = now,
+                        UpdatedAt = now
+                    },
+                    new()
+                    {
+                        Name = "Premium",
+                        Description = "Day du tinh nang AI, phat hien som va ho tro uu tien.",
+                        Price = 249000,
+                        BillingCycle = "Month",
+                        IsActive = true,
+                        HasAIHealthTracking = true,
+                        HasVaccinationTracking = true,
+                        HasHealthReminders = true,
+                        HasAIRecommendations = true,
+                        HasNutritionalAnalysis = true,
+                        HasEarlyDiseaseDetection = true,
+                        HasPrioritySupport = true,
+                        CreatedAt = now,
+                        UpdatedAt = now
+                    }
+                };
+
+                foreach (var package in defaults)
+                {
+                    await packageRepo.AddAsync(package);
+                }
+
+                await _unitOfWork.SaveChangesAsync();
+
+                packages = await packageRepo
+                    .QueryWithIncludes()
+                    .Where(p => p.IsActive)
+                    .OrderBy(p => p.Price)
+                    .ToListAsync();
+            }
 
             var dtos = packages.Select(MapToPackageDto);
             return ServiceResult<IEnumerable<SubscriptionPackageDto>>.SuccessResult(dtos);
