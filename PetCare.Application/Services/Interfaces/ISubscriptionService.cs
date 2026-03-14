@@ -15,6 +15,9 @@ public interface ISubscriptionService
     /// <summary>Handles the PayOS webhook and activates the subscription on success.</summary>
     Task<ServiceResult<bool>> HandlePayOSWebhookAsync(PayOSWebhookDto webhook);
 
+    /// <summary>Confirms payment from return flow and activates pending subscription if paid.</summary>
+    Task<ServiceResult<bool>> ConfirmPaymentAsync(long orderCode, Guid userId);
+
     /// <summary>Returns the active subscription for a user (null if none).</summary>
     Task<ServiceResult<UserSubscriptionDto?>> GetMySubscriptionAsync(Guid userId);
 

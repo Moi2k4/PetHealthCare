@@ -264,6 +264,55 @@ public class SubscriptionService : ISubscriptionService
         }
     }
 
+    public async Task<ServiceResult<bool>> ConfirmPaymentAsync(long orderCode, Guid userId)
+    {
+        try
+        {
+            var orderCodeText = orderCode.ToString();
+
+            var pendingSubscription = await _unitOfWork.Repository<UserSubscription>()
+                .QueryWithIncludes(s => s.SubscriptionPackage)
+                .FirstOrDefaultAsync(s =>
+                    s.UserId == userId
+                    && s.TransactionId == orderCodeText
+                    && s.Status == "Pending");
+
+            if (pendingSubscription == null)
+            {
+                var activeSubscription = await _unitOfWork.Repository<UserSubscription>()
+                    .QueryWithIncludes(s => s.SubscriptionPackage)
+                    .FirstOrDefaultAsync(s =>
+                        s.UserId == userId
+                        && s.TransactionId == orderCodeText
+                        && s.IsActive
+                        && s.Status == "Active");
+
+                return activeSubscription != null
+                    ? ServiceResult<bool>.SuccessResult(true)
+                    : ServiceResult<bool>.FailureResult("Pending subscription not found.");
+            }
+
+            // Fallback confirmation: activate the pending subscription in return flow.
+            // Webhook should still be configured in PayOS dashboard for full reliability.
+            pendingSubscription.IsActive = true;
+            pendingSubscription.Status = "Active";
+            pendingSubscription.StartDate = DateTime.UtcNow;
+            pendingSubscription.EndDate = pendingSubscription.SubscriptionPackage.BillingCycle == "Year"
+                ? DateTime.UtcNow.AddYears(1)
+                : DateTime.UtcNow.AddMonths(1);
+            pendingSubscription.NextBillingDate = pendingSubscription.EndDate;
+
+            await _unitOfWork.Repository<UserSubscription>().UpdateAsync(pendingSubscription);
+            await _unitOfWork.SaveChangesAsync();
+
+            return ServiceResult<bool>.SuccessResult(true);
+        }
+        catch (Exception ex)
+        {
+            return ServiceResult<bool>.FailureResult($"Confirm payment error: {ex.Message}");
+        }
+    }
+
     public async Task<ServiceResult<UserSubscriptionDto?>> GetMySubscriptionAsync(Guid userId)
     {
         try

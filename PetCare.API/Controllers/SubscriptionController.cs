@@ -62,6 +62,22 @@ public class SubscriptionController : ControllerBase
     }
 
     /// <summary>
+    /// Confirm subscription payment from return URL flow (fallback when webhook is delayed).
+    /// </summary>
+    [HttpPost("confirm-payment")]
+    [Authorize]
+    public async Task<IActionResult> ConfirmPayment([FromQuery] long orderCode)
+    {
+        if (orderCode <= 0) return BadRequest(new { success = false, message = "Invalid orderCode" });
+
+        var userId = GetUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        var result = await _subscriptionService.ConfirmPaymentAsync(orderCode, userId);
+        return result.Success ? Ok(result) : BadRequest(result);
+    }
+
+    /// <summary>
     /// Get the current user's active subscription.
     /// </summary>
     [HttpGet("my")]
