@@ -64,6 +64,8 @@ public class PetService : IPetService
     {
         try
         {
+            createPetDto.DateOfBirth = NormalizeDateTimeToUtc(createPetDto.DateOfBirth);
+
             // Validate species exists if provided
             if (createPetDto.SpeciesId.HasValue)
             {
@@ -109,6 +111,8 @@ public class PetService : IPetService
     {
         try
         {
+            updatePetDto.DateOfBirth = NormalizeDateTimeToUtc(updatePetDto.DateOfBirth);
+
             var pet = await _unitOfWork.Pets.GetByIdAsync(petId);
             
             if (pet == null)
@@ -243,6 +247,22 @@ public class PetService : IPetService
             current = current.InnerException;
         }
         return current.Message;
+    }
+
+    private static DateTime? NormalizeDateTimeToUtc(DateTime? value)
+    {
+        if (!value.HasValue)
+        {
+            return null;
+        }
+
+        return value.Value.Kind switch
+        {
+            DateTimeKind.Utc => value.Value,
+            DateTimeKind.Local => value.Value.ToUniversalTime(),
+            DateTimeKind.Unspecified => DateTime.SpecifyKind(value.Value, DateTimeKind.Utc),
+            _ => value.Value
+        };
     }
 }
 
