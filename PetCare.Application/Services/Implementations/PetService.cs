@@ -41,7 +41,7 @@ public class PetService : IPetService
         }
         catch (Exception ex)
         {
-            return ServiceResult<PetDto>.FailureResult($"Error retrieving pet: {ex.Message}");
+            return ServiceResult<PetDto>.FailureResult($"Error retrieving pet: {GetInnermostMessage(ex)}");
         }
     }
 
@@ -56,7 +56,7 @@ public class PetService : IPetService
         }
         catch (Exception ex)
         {
-            return ServiceResult<IEnumerable<PetDto>>.FailureResult($"Error retrieving pets: {ex.Message}");
+            return ServiceResult<IEnumerable<PetDto>>.FailureResult($"Error retrieving pets: {GetInnermostMessage(ex)}");
         }
     }
 
@@ -101,7 +101,7 @@ public class PetService : IPetService
         }
         catch (Exception ex)
         {
-            return ServiceResult<PetDto>.FailureResult($"Error creating pet: {ex.Message}");
+            return ServiceResult<PetDto>.FailureResult($"Error creating pet: {GetInnermostMessage(ex)}");
         }
     }
 
@@ -156,7 +156,7 @@ public class PetService : IPetService
         }
         catch (Exception ex)
         {
-            return ServiceResult<PetDto>.FailureResult($"Error updating pet: {ex.Message}");
+            return ServiceResult<PetDto>.FailureResult($"Error updating pet: {GetInnermostMessage(ex)}");
         }
     }
 
@@ -186,7 +186,7 @@ public class PetService : IPetService
         }
         catch (Exception ex)
         {
-            return ServiceResult<bool>.FailureResult($"Error deleting pet: {ex.Message}");
+            return ServiceResult<bool>.FailureResult($"Error deleting pet: {GetInnermostMessage(ex)}");
         }
     }
 
@@ -201,7 +201,7 @@ public class PetService : IPetService
         }
         catch (Exception ex)
         {
-            return ServiceResult<IEnumerable<PetDto>>.FailureResult($"Error retrieving active pets: {ex.Message}");
+            return ServiceResult<IEnumerable<PetDto>>.FailureResult($"Error retrieving active pets: {GetInnermostMessage(ex)}");
         }
     }
 
@@ -231,8 +231,18 @@ public class PetService : IPetService
         }
         catch (Exception ex)
         {
-            return ServiceResult<PagedResult<PetDto>>.FailureResult($"Error retrieving pets: {ex.Message}");
+            return ServiceResult<PagedResult<PetDto>>.FailureResult($"Error retrieving pets: {GetInnermostMessage(ex)}");
         }
+    }
+
+    private static string GetInnermostMessage(Exception ex)
+    {
+        var current = ex;
+        while (current.InnerException != null)
+        {
+            current = current.InnerException;
+        }
+        return current.Message;
     }
 }
 
