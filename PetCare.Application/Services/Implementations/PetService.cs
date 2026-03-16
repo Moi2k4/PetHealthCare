@@ -66,6 +66,26 @@ public class PetService : IPetService
         {
             createPetDto.DateOfBirth = NormalizeDateTimeToUtc(createPetDto.DateOfBirth);
 
+            var now = DateTime.UtcNow;
+            var hasActiveMembership = await _unitOfWork.Repository<UserSubscription>()
+                .AnyAsync(s =>
+                    s.UserId == userId
+                    && s.IsActive
+                    && s.Status == "Active"
+                    && (s.EndDate == null || s.EndDate >= now));
+
+            var activePetCount = await _unitOfWork.Repository<Pet>()
+                .CountAsync(p => p.UserId == userId && p.IsActive);
+
+            // Business rule:
+                // - No active membership: max 2 active pets
+            // - Active membership: can add more than 2 (no cap enforced here)
+                if (!hasActiveMembership && activePetCount >= 2)
+            {
+                return ServiceResult<PetDto>.FailureResult(
+                    "Your account can only store up to 2 pets without membership. Please upgrade to add more pets.");
+            }
+
             // Validate species exists if provided
             if (createPetDto.SpeciesId.HasValue)
             {

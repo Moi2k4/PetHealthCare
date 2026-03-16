@@ -17,6 +17,8 @@ namespace PetCare.API.Controllers;
 [Authorize]
 public class CheckoutController : ControllerBase
 {
+    private const decimal MembershipDiscountRate = 0.10m;
+
     private readonly PetCareDbContext _context;
     private readonly PayOSClient? _payOS;
     private readonly bool _payOsConfigured;
@@ -58,7 +60,7 @@ public class CheckoutController : ControllerBase
     }
 
     [HttpGet("summary")]
-    public async Task<IActionResult> GetSummary()
+    public async Task<IActionResult> GetSummary([FromQuery] string? voucherCode = null)
     {
         var userId = GetUserId();
 
@@ -83,6 +85,16 @@ public class CheckoutController : ControllerBase
         }).ToList();
 
         var totalAmount = items.Sum(i => i.TotalPrice);
+        var hasActiveMembership = await HasActiveMembershipAsync(userId);
+        var membershipDiscountAmount = hasActiveMembership
+            ? Math.Round(totalAmount * MembershipDiscountRate, 0, MidpointRounding.AwayFromZero)
+            : 0m;
+
+        var voucherResult = await TryBuildVoucherDiscountAsync(voucherCode, userId, totalAmount, membershipDiscountAmount);
+        var voucherDiscountAmount = voucherResult.IsValid ? voucherResult.DiscountAmount : 0m;
+
+        var discountAmount = membershipDiscountAmount + voucherDiscountAmount;
+        var finalAmount = Math.Max(0m, totalAmount - discountAmount);
 
         return Ok(new
         {
@@ -92,8 +104,16 @@ public class CheckoutController : ControllerBase
             {
                 items,
                 totalAmount,
+                hasMembershipDiscount = hasActiveMembership,
+                membershipDiscountRate = hasActiveMembership ? MembershipDiscountRate : 0m,
+                membershipDiscountAmount,
+                hasVoucherDiscount = voucherResult.IsValid,
+                voucherCode = voucherResult.IsValid ? voucherResult.Voucher?.Code : null,
+                voucherDiscountAmount,
+                voucherMessage = voucherResult.Message,
+                discountAmount,
                 shippingFee = 0m,
-                finalAmount = totalAmount
+                finalAmount
             }
         });
     }
@@ -168,8 +188,23 @@ public class CheckoutController : ControllerBase
         var orderNumber = $"ORD{now:yyyyMMddHHmmssfff}";
 
         var totalAmount = cartItems.Sum(i => (i.Product.SalePrice ?? i.Product.Price) * i.Quantity);
+        var hasActiveMembership = await HasActiveMembershipAsync(userId);
         const decimal shippingFee = 0m;
-        const decimal discountAmount = 0m;
+        var membershipDiscountAmount = hasActiveMembership
+            ? Math.Round(totalAmount * MembershipDiscountRate, 0, MidpointRounding.AwayFromZero)
+            : 0m;
+        var voucherResult = await TryBuildVoucherDiscountAsync(dto.VoucherCode, userId, totalAmount, membershipDiscountAmount);
+        if (!voucherResult.IsValid && !string.IsNullOrWhiteSpace(dto.VoucherCode))
+        {
+            return BadRequest(new
+            {
+                success = false,
+                message = voucherResult.Message
+            });
+        }
+
+        var voucherDiscountAmount = voucherResult.IsValid ? voucherResult.DiscountAmount : 0m;
+        var discountAmount = membershipDiscountAmount + voucherDiscountAmount;
         var finalAmount = totalAmount + shippingFee - discountAmount;
 
         if (paymentMethod == "payos" && finalAmount <= 0)
@@ -195,6 +230,8 @@ public class CheckoutController : ControllerBase
             ShippingName = dto.ShippingName.Trim(),
             ShippingPhone = dto.ShippingPhone.Trim(),
             ShippingAddress = dto.ShippingAddress.Trim(),
+            VoucherId = voucherResult.IsValid ? voucherResult.Voucher!.Id : null,
+            VoucherCode = voucherResult.IsValid ? voucherResult.Voucher!.Code : null,
             Notes = dto.Note?.Trim(),
             OrderedAt = now,
             CreatedAt = now,
@@ -223,6 +260,22 @@ public class CheckoutController : ControllerBase
             cartItem.Product.StockQuantity -= cartItem.Quantity;
             cartItem.Product.UpdatedAt = now;
             _context.Products.Update(cartItem.Product);
+        }
+
+        if (voucherResult.IsValid)
+        {
+            await _context.VoucherUsages.AddAsync(new VoucherUsage
+            {
+                VoucherId = voucherResult.Voucher!.Id,
+                UserId = userId,
+                OrderId = order.Id,
+                DiscountAmount = voucherDiscountAmount,
+                UsedAt = now
+            });
+
+            voucherResult.Voucher.UsedCount += 1;
+            voucherResult.Voucher.UpdatedAt = now;
+            _context.Vouchers.Update(voucherResult.Voucher);
         }
 
         long? orderCode = null;
@@ -317,6 +370,11 @@ public class CheckoutController : ControllerBase
             {
                 order.Id,
                 order.OrderNumber,
+                order.TotalAmount,
+                membershipDiscountAmount,
+                voucherDiscountAmount,
+                order.VoucherCode,
+                order.DiscountAmount,
                 order.FinalAmount,
                 order.PaymentMethod,
                 order.PaymentStatus,
@@ -326,6 +384,95 @@ public class CheckoutController : ControllerBase
                 orderCode
             }
         });
+    }
+
+    private async Task<bool> HasActiveMembershipAsync(Guid userId)
+    {
+        return await _context.UserSubscriptions
+            .AsNoTracking()
+            .Include(s => s.SubscriptionPackage)
+            .AnyAsync(s =>
+                s.UserId == userId
+                && s.IsActive
+                && s.Status == "Active"
+                && s.SubscriptionPackage.Price > 0
+                && (s.EndDate == null || s.EndDate > DateTime.UtcNow));
+    }
+
+    private async Task<(bool IsValid, string Message, decimal DiscountAmount, Voucher? Voucher)> TryBuildVoucherDiscountAsync(
+        string? voucherCode,
+        Guid userId,
+        decimal totalAmount,
+        decimal membershipDiscountAmount)
+    {
+        if (string.IsNullOrWhiteSpace(voucherCode))
+        {
+            return (false, string.Empty, 0m, null);
+        }
+
+        var normalizedCode = voucherCode.Trim().ToUpperInvariant();
+        var now = DateTime.UtcNow;
+
+        var voucher = await _context.Vouchers
+            .FirstOrDefaultAsync(v => v.Code.ToUpper() == normalizedCode);
+
+        if (voucher == null)
+        {
+            return (false, "Voucher code does not exist.", 0m, null);
+        }
+
+        if (!voucher.IsActive)
+        {
+            return (false, "Voucher is not active.", 0m, null);
+        }
+
+        if (voucher.ValidFrom > now || voucher.ValidTo < now)
+        {
+            return (false, "Voucher is expired or not yet valid.", 0m, null);
+        }
+
+        if (voucher.UsageLimit.HasValue && voucher.UsedCount >= voucher.UsageLimit.Value)
+        {
+            return (false, "Voucher usage limit has been reached.", 0m, null);
+        }
+
+        if (voucher.MinimumOrderAmount.HasValue && totalAmount < voucher.MinimumOrderAmount.Value)
+        {
+            return (false, $"Order must be at least {voucher.MinimumOrderAmount.Value:N0} VND to use this voucher.", 0m, null);
+        }
+
+        var alreadyUsedByUser = await _context.VoucherUsages
+            .AnyAsync(vu => vu.VoucherId == voucher.Id && vu.UserId == userId);
+
+        if (alreadyUsedByUser)
+        {
+            return (false, "You already used this voucher.", 0m, null);
+        }
+
+        var baseAmount = Math.Max(0m, totalAmount - membershipDiscountAmount);
+        decimal discountAmount;
+
+        if (string.Equals(voucher.DiscountType, "fixed", StringComparison.OrdinalIgnoreCase))
+        {
+            discountAmount = voucher.DiscountValue;
+        }
+        else
+        {
+            discountAmount = Math.Round(baseAmount * (voucher.DiscountValue / 100m), 0, MidpointRounding.AwayFromZero);
+        }
+
+        if (voucher.MaximumDiscountAmount.HasValue)
+        {
+            discountAmount = Math.Min(discountAmount, voucher.MaximumDiscountAmount.Value);
+        }
+
+        discountAmount = Math.Min(discountAmount, baseAmount);
+        if (discountAmount <= 0)
+        {
+            return (false, "Voucher discount value is not applicable to this order.", 0m, null);
+        }
+
+        return (true, "Voucher applied successfully.", discountAmount, voucher);
     }
 
     [HttpPost("confirm-payment")]
