@@ -335,6 +335,47 @@ public class SubscriptionService : ISubscriptionService
         }
     }
 
+    public async Task<ServiceResult<MembershipStatusDto>> GetMembershipStatusAsync(Guid userId)
+    {
+        try
+        {
+            var now = DateTime.UtcNow;
+
+            var sub = await _unitOfWork.Repository<UserSubscription>()
+                .QueryWithIncludes(s => s.SubscriptionPackage)
+                .Where(s =>
+                    s.UserId == userId
+                    && s.IsActive
+                    && s.Status == "Active"
+                    && (s.EndDate == null || s.EndDate >= now))
+                .OrderByDescending(s => s.StartDate)
+                .FirstOrDefaultAsync();
+
+            if (sub == null)
+            {
+                return ServiceResult<MembershipStatusDto>.SuccessResult(new MembershipStatusDto
+                {
+                    HasMembership = false
+                });
+            }
+
+            return ServiceResult<MembershipStatusDto>.SuccessResult(new MembershipStatusDto
+            {
+                HasMembership = true,
+                SubscriptionId = sub.Id,
+                PackageName = sub.SubscriptionPackage?.Name,
+                StartDate = sub.StartDate,
+                EndDate = sub.EndDate,
+                Status = sub.Status
+            });
+        }
+        catch (Exception ex)
+        {
+            return ServiceResult<MembershipStatusDto>.FailureResult(
+                $"Error checking membership status: {ex.Message}");
+        }
+    }
+
     public async Task<ServiceResult<bool>> CancelSubscriptionAsync(Guid userId)
     {
         try

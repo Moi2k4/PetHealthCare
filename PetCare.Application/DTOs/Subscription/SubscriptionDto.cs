@@ -41,6 +41,16 @@ public class UserSubscriptionDto
     public decimal AmountPaid { get; set; }
 }
 
+public class MembershipStatusDto
+{
+    public bool HasMembership { get; set; }
+    public Guid? SubscriptionId { get; set; }
+    public string? PackageName { get; set; }
+    public DateTime? StartDate { get; set; }
+    public DateTime? EndDate { get; set; }
+    public string? Status { get; set; }
+}
+
 public class SubscribeDto
 {
     public Guid PackageId { get; set; }

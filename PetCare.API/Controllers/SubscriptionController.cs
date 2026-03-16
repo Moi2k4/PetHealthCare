@@ -92,6 +92,20 @@ public class SubscriptionController : ControllerBase
     }
 
     /// <summary>
+    /// Check whether the current user's account has an active membership.
+    /// </summary>
+    [HttpGet("membership-status")]
+    [Authorize]
+    public async Task<IActionResult> GetMembershipStatus()
+    {
+        var userId = GetUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        var result = await _subscriptionService.GetMembershipStatusAsync(userId);
+        return result.Success ? Ok(result) : BadRequest(result);
+    }
+
+    /// <summary>
     /// Cancel the current user's active subscription.
     /// </summary>
     [HttpDelete("cancel")]

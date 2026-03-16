@@ -21,6 +21,9 @@ public interface ISubscriptionService
     /// <summary>Returns the active subscription for a user (null if none).</summary>
     Task<ServiceResult<UserSubscriptionDto?>> GetMySubscriptionAsync(Guid userId);
 
+    /// <summary>Returns membership status for a user account.</summary>
+    Task<ServiceResult<MembershipStatusDto>> GetMembershipStatusAsync(Guid userId);
+
     /// <summary>Cancels the user's active subscription.</summary>
     Task<ServiceResult<bool>> CancelSubscriptionAsync(Guid userId);
 }
