@@ -283,6 +283,49 @@ public class AdminDashboardController : ControllerBase
         });
     }
 
+    [HttpGet("users")]
+    public async Task<IActionResult> GetUsers([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+    {
+        if (page < 1 || pageSize < 1 || pageSize > 200)
+        {
+            return BadRequest(new { success = false, message = "Invalid pagination parameters" });
+        }
+
+        var query = _context.Users
+            .AsNoTracking()
+            .Include(u => u.Role)
+            .OrderByDescending(u => u.CreatedAt);
+
+        var totalCount = await query.CountAsync();
+        var items = await query
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(u => new
+            {
+                u.Id,
+                u.FullName,
+                u.Email,
+                RoleName = u.Role != null ? u.Role.RoleName : null,
+                u.IsActive,
+                u.CreatedAt
+            })
+            .ToListAsync();
+
+        return Ok(new
+        {
+            success = true,
+            message = "Users retrieved successfully",
+            data = new
+            {
+                items,
+                totalCount,
+                page,
+                pageSize,
+                totalPages = (int)Math.Ceiling(totalCount / (double)pageSize)
+            }
+        });
+    }
+
     [HttpPost("vouchers")]
     public async Task<IActionResult> CreateVoucher([FromBody] CreateVoucherDto dto)
     {
