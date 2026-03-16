@@ -8,6 +8,7 @@ using PetCare.Application.Common;
 using PetCare.Application.DTOs.Health;
 using PetCare.Application.Services.Interfaces;
 using PetCare.Domain.Entities;
+using PetCare.Domain.Interfaces;
 using PetCare.Infrastructure.Repositories.Interfaces;
 
 namespace PetCare.Application.Services.Implementations;
@@ -15,6 +16,7 @@ namespace PetCare.Application.Services.Implementations;
 public class AIHealthService : IAIHealthService
 {
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IEmailService _emailService;
     private readonly HttpClient _httpClient;
     private readonly string _apiKey;
     private readonly string _model;
@@ -23,9 +25,14 @@ public class AIHealthService : IAIHealthService
     private const string GeminiBaseUrl =
         "https://generativelanguage.googleapis.com/v1beta/models/{0}:generateContent?key={1}";
 
-    public AIHealthService(IUnitOfWork unitOfWork, IHttpClientFactory httpClientFactory, IConfiguration configuration)
+    public AIHealthService(
+        IUnitOfWork unitOfWork,
+        IHttpClientFactory httpClientFactory,
+        IConfiguration configuration,
+        IEmailService emailService)
     {
         _unitOfWork = unitOfWork;
+        _emailService = emailService;
         _httpClient = httpClientFactory.CreateClient("GeminiClient");
         _apiKey = GetFirstNonEmpty(
             configuration["GoogleAI:ApiKey"],
@@ -122,6 +129,9 @@ public class AIHealthService : IAIHealthService
             await _unitOfWork.SaveChangesAsync();
 
             var dto = MapToResponseDto(analysis, pet.PetName);
+
+            await TrySendAIAnalysisEmailAsync(pet, dto);
+
             return ServiceResult<AIHealthAnalysisResponseDto>.SuccessResult(dto);
         }
         catch (HttpRequestException ex)
@@ -437,5 +447,41 @@ public class AIHealthService : IAIHealthService
         }
 
         return null;
+    }
+
+    private async Task TrySendAIAnalysisEmailAsync(Pet pet, AIHealthAnalysisResponseDto dto)
+    {
+        try
+        {
+            var owner = await _unitOfWork.Repository<User>().GetByIdAsync(pet.UserId);
+            if (owner == null || string.IsNullOrWhiteSpace(owner.Email))
+            {
+                return;
+            }
+
+            var summary = dto.Recommendations;
+            if (string.IsNullOrWhiteSpace(summary))
+            {
+                summary = dto.AIResponse;
+            }
+
+            if (summary.Length > 1200)
+            {
+                summary = summary[..1200] + "...";
+            }
+
+            await _emailService.SendAIAnalysisSummaryAsync(
+                owner.Email,
+                string.IsNullOrWhiteSpace(owner.FullName) ? "PetCare User" : owner.FullName,
+                dto.PetName,
+                dto.AnalysisType,
+                summary,
+                dto.ConfidenceScore,
+                dto.CreatedAt);
+        }
+        catch
+        {
+            // Best effort only: AI analysis should not fail because of email issues.
+        }
     }
 }

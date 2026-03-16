@@ -72,7 +72,7 @@ public class CheckoutController : ControllerBase
 
         var items = cartItems.Select(c =>
         {
-            var unitPrice = c.Product.SalePrice ?? c.Product.Price;
+            var unitPrice = GetEffectiveUnitPrice(c.Product);
             return new
             {
                 c.Id,
@@ -187,7 +187,7 @@ public class CheckoutController : ControllerBase
         var now = DateTime.UtcNow;
         var orderNumber = $"ORD{now:yyyyMMddHHmmssfff}";
 
-        var totalAmount = cartItems.Sum(i => (i.Product.SalePrice ?? i.Product.Price) * i.Quantity);
+        var totalAmount = cartItems.Sum(i => GetEffectiveUnitPrice(i.Product) * i.Quantity);
         var hasActiveMembership = await HasActiveMembershipAsync(userId);
         const decimal shippingFee = 0m;
         var membershipDiscountAmount = hasActiveMembership
@@ -242,7 +242,7 @@ public class CheckoutController : ControllerBase
 
         foreach (var cartItem in cartItems)
         {
-            var unitPrice = cartItem.Product.SalePrice ?? cartItem.Product.Price;
+            var unitPrice = GetEffectiveUnitPrice(cartItem.Product);
 
             var orderItem = new OrderItem
             {
@@ -300,7 +300,7 @@ public class CheckoutController : ControllerBase
                 {
                     Name = ci.Product.ProductName,
                     Quantity = ci.Quantity,
-                    Price = Math.Max(1, decimal.ToInt32(decimal.Ceiling(ci.Product.SalePrice ?? ci.Product.Price)))
+                    Price = Math.Max(1, decimal.ToInt32(decimal.Ceiling(GetEffectiveUnitPrice(ci.Product))))
                 }).ToList()
             };
 

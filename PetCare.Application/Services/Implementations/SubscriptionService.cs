@@ -7,6 +7,7 @@ using PetCare.Application.Common;
 using PetCare.Application.DTOs.Subscription;
 using PetCare.Application.Services.Interfaces;
 using PetCare.Domain.Entities;
+using PetCare.Domain.Interfaces;
 using PetCare.Infrastructure.Repositories.Interfaces;
 
 namespace PetCare.Application.Services.Implementations;
@@ -14,13 +15,15 @@ namespace PetCare.Application.Services.Implementations;
 public class SubscriptionService : ISubscriptionService
 {
     private readonly IUnitOfWork _unitOfWork;
+    private readonly IEmailService _emailService;
     private readonly PayOSClient _payOS;
     private readonly string _returnUrl;
     private readonly string _cancelUrl;
 
-    public SubscriptionService(IUnitOfWork unitOfWork, IConfiguration configuration)
+    public SubscriptionService(IUnitOfWork unitOfWork, IConfiguration configuration, IEmailService emailService)
     {
         _unitOfWork = unitOfWork;
+        _emailService = emailService;
 
         var clientId = GetFirstNonEmpty(
             configuration["PayOS:ClientId"],
@@ -142,6 +145,8 @@ public class SubscriptionService : ISubscriptionService
                 await _unitOfWork.Repository<UserSubscription>().AddAsync(freeSub);
                 await _unitOfWork.SaveChangesAsync();
 
+                await SendSubscriptionActivationEmailAsync(userId, package.Name, freeSub.EndDate);
+
                 return ServiceResult<SubscriptionPaymentLinkDto>.SuccessResult(new SubscriptionPaymentLinkDto
                 {
                     PaymentUrl = string.Empty,
@@ -256,6 +261,11 @@ public class SubscriptionService : ISubscriptionService
             await _unitOfWork.Repository<UserSubscription>().UpdateAsync(subscription);
             await _unitOfWork.SaveChangesAsync();
 
+            await SendSubscriptionActivationEmailAsync(
+                subscription.UserId,
+                subscription.SubscriptionPackage?.Name ?? "Subscription",
+                subscription.EndDate);
+
             return ServiceResult<bool>.SuccessResult(true);
         }
         catch (Exception ex)
@@ -304,6 +314,11 @@ public class SubscriptionService : ISubscriptionService
 
             await _unitOfWork.Repository<UserSubscription>().UpdateAsync(pendingSubscription);
             await _unitOfWork.SaveChangesAsync();
+
+            await SendSubscriptionActivationEmailAsync(
+                pendingSubscription.UserId,
+                pendingSubscription.SubscriptionPackage?.Name ?? "Subscription",
+                pendingSubscription.EndDate);
 
             return ServiceResult<bool>.SuccessResult(true);
         }
@@ -446,5 +461,27 @@ public class SubscriptionService : ISubscriptionService
         }
 
         return null;
+    }
+
+    private async Task SendSubscriptionActivationEmailAsync(Guid userId, string packageName, DateTime? endDate)
+    {
+        try
+        {
+            var user = await _unitOfWork.Repository<User>().GetByIdAsync(userId);
+            if (user == null || string.IsNullOrWhiteSpace(user.Email))
+            {
+                return;
+            }
+
+            await _emailService.SendSubscriptionConfirmationAsync(
+                user.Email,
+                string.IsNullOrWhiteSpace(user.FullName) ? "PetCare User" : user.FullName,
+                packageName,
+                endDate ?? DateTime.UtcNow.AddMonths(1));
+        }
+        catch
+        {
+            // Best effort only: do not fail payment/subscription activation because of email errors.
+        }
     }
 }

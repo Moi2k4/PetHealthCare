@@ -146,6 +146,18 @@ public class ProductService : IProductService
     {
         try
         {
+            if (createProductDto.SalePrice.HasValue)
+            {
+                if (createProductDto.SalePrice.Value <= 0)
+                {
+                    createProductDto.SalePrice = null;
+                }
+                else if (createProductDto.SalePrice.Value >= createProductDto.Price)
+                {
+                    return ServiceResult<ProductDto>.FailureResult("Sale price must be greater than 0 and less than the base price.");
+                }
+            }
+
             // Validate that CategoryId exists to avoid FK constraint violations
             if (createProductDto.CategoryId.HasValue && createProductDto.CategoryId.Value != Guid.Empty)
             {
@@ -223,7 +235,29 @@ public class ProductService : IProductService
                 return ServiceResult<ProductDto>.FailureResult("Product not found");
             }
 
+            if (updateProductDto.SalePrice.HasValue)
+            {
+                if (updateProductDto.SalePrice.Value <= 0)
+                {
+                    product.SalePrice = null;
+                    updateProductDto.SalePrice = null;
+                }
+                else
+                {
+                    var effectivePrice = updateProductDto.Price ?? product.Price;
+                    if (updateProductDto.SalePrice.Value >= effectivePrice)
+                    {
+                        return ServiceResult<ProductDto>.FailureResult("Sale price must be greater than 0 and less than the base price.");
+                    }
+                }
+            }
+
             _mapper.Map(updateProductDto, product);
+
+            if (product.SalePrice.HasValue && product.SalePrice.Value <= 0)
+            {
+                product.SalePrice = null;
+            }
 
             await _unitOfWork.SaveChangesAsync();
 

@@ -96,4 +96,46 @@ public class ResendEmailService : IEmailService
 
         await SendEmailAsync(to, subject, html);
     }
+
+    public async Task SendAIAnalysisSummaryAsync(
+        string to,
+        string userName,
+        string petName,
+        string analysisType,
+        string aiSummary,
+        decimal? confidenceScore,
+        DateTime createdAt)
+    {
+        var subject = $"AI Health Analysis Result - {petName}";
+        var confidenceText = confidenceScore.HasValue ? $"{confidenceScore.Value:0.#}%" : "N/A";
+
+        var html = $"""
+            <div style="font-family: Arial, sans-serif; max-width: 650px; margin: 0 auto;">
+                <div style="background-color: #0f766e; padding: 26px; text-align: center; border-radius: 8px 8px 0 0;">
+                    <h1 style="color: white; margin: 0;">AI Health Analysis Completed</h1>
+                </div>
+                <div style="padding: 24px; background-color: #f9f9f9; border-radius: 0 0 8px 8px;">
+                    <p style="font-size: 15px;">Hi <strong>{userName}</strong>,</p>
+                    <p style="font-size: 15px;">Your AI health analysis for <strong>{petName}</strong> has been completed.</p>
+
+                    <div style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:16px;margin:16px 0;">
+                        <p style="margin:0 0 8px;"><strong>Analysis type:</strong> {analysisType}</p>
+                        <p style="margin:0 0 8px;"><strong>Confidence:</strong> {confidenceText}</p>
+                        <p style="margin:0;"><strong>Created at:</strong> {createdAt:yyyy-MM-dd HH:mm} UTC</p>
+                    </div>
+
+                    <div style="background:#fff;border:1px dashed #cbd5e1;border-radius:8px;padding:16px;margin:16px 0;">
+                        <p style="margin:0 0 8px;"><strong>Summary</strong></p>
+                        <p style="white-space:pre-wrap;line-height:1.6;margin:0;">{System.Net.WebUtility.HtmlEncode(aiSummary)}</p>
+                    </div>
+
+                    <p style="font-size: 13px; color:#64748b; margin-top:18px;">
+                        This AI output is for reference and does not replace veterinary diagnosis.
+                    </p>
+                </div>
+            </div>
+            """;
+
+        await SendEmailAsync(to, subject, html);
+    }
 }
