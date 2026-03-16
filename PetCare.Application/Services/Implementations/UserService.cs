@@ -213,10 +213,17 @@ public class UserService : IUserService
                 return ServiceResult<bool>.FailureResult("User not found");
             }
 
-            await _unitOfWork.Users.DeleteAsync(user);
+            if (!user.IsActive)
+            {
+                return ServiceResult<bool>.SuccessResult(true, "User is already inactive");
+            }
+
+            // Soft delete: keep history and relationships, only mark inactive.
+            user.IsActive = false;
+            await _unitOfWork.Users.UpdateAsync(user);
             await _unitOfWork.SaveChangesAsync();
 
-            return ServiceResult<bool>.SuccessResult(true, "User deleted successfully");
+            return ServiceResult<bool>.SuccessResult(true, "User deactivated successfully");
         }
         catch (Exception ex)
         {
