@@ -689,6 +689,16 @@ public class CheckoutController : ControllerBase
         return raw.Length <= 25 ? raw : raw[..25];
     }
 
+    private static decimal GetEffectiveUnitPrice(Product product)
+    {
+        if (product.SalePrice.HasValue && product.SalePrice.Value > 0 && product.SalePrice.Value < product.Price)
+        {
+            return product.SalePrice.Value;
+        }
+
+        return product.Price;
+    }
+
     private Guid GetUserId()
     {
         var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
