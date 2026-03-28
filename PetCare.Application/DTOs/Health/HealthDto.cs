@@ -65,4 +65,26 @@ public class DogRoutineItemDto
     public string Source { get; set; } = string.Empty;
 }
 
+public class CreateVaccinationDto
+{
+    public string VaccineName { get; set; } = string.Empty;
+    public DateTime? VaccinationDate { get; set; }
+    public DateTime? NextDueDate { get; set; }
+    public string? BatchNumber { get; set; }
+    public string? Notes { get; set; }
+}
+
+public class VaccinationDto
+{
+    public Guid Id { get; set; }
+    public Guid PetId { get; set; }
+    public string VaccineName { get; set; } = string.Empty;
+    public DateTime VaccinationDate { get; set; }
+    public DateTime? NextDueDate { get; set; }
+    public string? BatchNumber { get; set; }
+    public Guid? AdministeredBy { get; set; }
+    public string? Notes { get; set; }
+    public DateTime CreatedAt { get; set; }
+}
+
 

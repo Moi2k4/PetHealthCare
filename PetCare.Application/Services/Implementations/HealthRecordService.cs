@@ -188,6 +188,60 @@ public class HealthRecordService : IHealthRecordService
         }
     }
 
+    public async Task<ServiceResult<VaccinationDto>> AddVaccinationAsync(Guid petId, CreateVaccinationDto dto, Guid requestingUserId)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(dto.VaccineName))
+                return ServiceResult<VaccinationDto>.FailureResult("Vaccine name is required");
+
+            var pet = await _unitOfWork.Pets.GetByIdAsync(petId);
+            if (pet == null)
+                return ServiceResult<VaccinationDto>.FailureResult("Pet not found");
+
+            if (pet.UserId != requestingUserId)
+            {
+                var user = await _unitOfWork.Users.GetUserWithRoleAsync(requestingUserId);
+                var role = user?.Role?.RoleName?.ToLowerInvariant();
+                if (role != "admin" && role != "staff")
+                    return ServiceResult<VaccinationDto>.FailureResult("You don't have permission to add vaccination for this pet");
+            }
+
+            var entity = new Vaccination
+            {
+                PetId = petId,
+                VaccineName = dto.VaccineName.Trim(),
+                VaccinationDate = dto.VaccinationDate ?? DateTime.UtcNow,
+                NextDueDate = dto.NextDueDate,
+                BatchNumber = dto.BatchNumber,
+                AdministeredBy = requestingUserId,
+                Notes = dto.Notes
+            };
+
+            await _unitOfWork.Repository<Vaccination>().AddAsync(entity);
+            await _unitOfWork.SaveChangesAsync();
+
+            var result = new VaccinationDto
+            {
+                Id = entity.Id,
+                PetId = entity.PetId,
+                VaccineName = entity.VaccineName,
+                VaccinationDate = entity.VaccinationDate,
+                NextDueDate = entity.NextDueDate,
+                BatchNumber = entity.BatchNumber,
+                AdministeredBy = entity.AdministeredBy,
+                Notes = entity.Notes,
+                CreatedAt = entity.CreatedAt
+            };
+
+            return ServiceResult<VaccinationDto>.SuccessResult(result, "Vaccination recorded successfully");
+        }
+        catch (Exception ex)
+        {
+            return ServiceResult<VaccinationDto>.FailureResult($"Error recording vaccination: {ex.Message}");
+        }
+    }
+
     public async Task<ServiceResult<DogRoutineScheduleDto>> GetDogRoutineScheduleAsync(Guid petId, Guid requestingUserId)
     {
         try

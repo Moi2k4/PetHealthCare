@@ -51,6 +51,19 @@ public class HealthRecordsController : ControllerBase
     }
 
     /// <summary>
+    /// Record a completed vaccination for a pet (owner, staff, admin).
+    /// </summary>
+    [HttpPost("pet/{petId}/vaccinations")]
+    public async Task<IActionResult> AddVaccination(Guid petId, [FromBody] CreateVaccinationDto dto)
+    {
+        var userId = GetUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        var result = await _healthRecordService.AddVaccinationAsync(petId, dto, userId);
+        return result.Success ? Ok(result) : BadRequest(result);
+    }
+
+    /// <summary>
     /// Get a single health record by ID
     /// </summary>
     [HttpGet("{id}")]
