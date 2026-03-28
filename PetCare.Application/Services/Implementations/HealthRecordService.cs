@@ -278,7 +278,10 @@ public class HealthRecordService : IHealthRecordService
             }
 
             var speciesName = pet.Species?.SpeciesName?.Trim().ToLowerInvariant() ?? string.Empty;
-            var isDog = speciesName.Contains("dog") || speciesName.Contains("cho") || speciesName.Contains("canine");
+            var isDog = speciesName.Contains("dog")
+                || speciesName.Contains("cho")
+                || speciesName.Contains("chó")
+                || speciesName.Contains("canine");
 
             var schedule = new DogRoutineScheduleDto
             {
