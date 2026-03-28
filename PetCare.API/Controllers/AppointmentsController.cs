@@ -84,7 +84,7 @@ public class AppointmentsController : ControllerBase
     /// Doctor / Admin views all appointments with optional status and date filters
     /// </summary>
     [HttpGet]
-    [Authorize(Roles = "Doctor,doctor,Admin,admin")]
+    [Authorize(Roles = "Doctor,doctor,Admin,admin,Provider,provider,ServiceProvider,serviceprovider,Service_Provider,service_provider")]
     public async Task<IActionResult> GetAllAppointments([FromQuery] string? status, [FromQuery] DateTime? date)
     {
         var result = await _appointmentService.GetAllAppointmentsAsync(status, date);
@@ -95,7 +95,7 @@ public class AppointmentsController : ControllerBase
     /// Doctor / Admin updates appointment status and adds medical notes
     /// </summary>
     [HttpPatch("{id:guid}/status")]
-    [Authorize(Roles = "Doctor,doctor,Admin,admin")]
+    [Authorize(Roles = "Doctor,doctor,Admin,admin,Provider,provider,ServiceProvider,serviceprovider,Service_Provider,service_provider")]
     public async Task<IActionResult> UpdateAppointmentStatus(Guid id, [FromBody] UpdateAppointmentStatusDto dto)
     {
         if (!ModelState.IsValid)
