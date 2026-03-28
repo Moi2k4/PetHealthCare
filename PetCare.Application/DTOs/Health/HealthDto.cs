@@ -43,4 +43,26 @@ public class UpdateHealthRecordDto
     public string? Notes { get; set; }
 }
 
+public class DogRoutineScheduleDto
+{
+    public Guid PetId { get; set; }
+    public string PetName { get; set; } = string.Empty;
+    public bool IsDog { get; set; }
+    public DateTime? DateOfBirth { get; set; }
+    public string? Note { get; set; }
+    public List<DogRoutineItemDto> Vaccinations { get; set; } = new();
+    public List<DogRoutineItemDto> Deworming { get; set; } = new();
+}
+
+public class DogRoutineItemDto
+{
+    public string Category { get; set; } = string.Empty;
+    public string ItemName { get; set; } = string.Empty;
+    public DateTime? DueDate { get; set; }
+    public DateTime? LastCompletedDate { get; set; }
+    public string Frequency { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public string Source { get; set; } = string.Empty;
+}
+
 

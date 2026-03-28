@@ -187,4 +187,197 @@ public class HealthRecordService : IHealthRecordService
             return ServiceResult<bool>.FailureResult($"Error deleting health record: {ex.Message}");
         }
     }
+
+    public async Task<ServiceResult<DogRoutineScheduleDto>> GetDogRoutineScheduleAsync(Guid petId, Guid requestingUserId)
+    {
+        try
+        {
+            var now = DateTime.UtcNow;
+            var activeSubscription = await _unitOfWork.Repository<UserSubscription>()
+                .QueryWithIncludes(s => s.SubscriptionPackage)
+                .Where(s => s.UserId == requestingUserId
+                    && s.IsActive
+                    && s.Status == "Active"
+                    && (s.EndDate == null || s.EndDate >= now))
+                .OrderByDescending(s => s.StartDate)
+                .FirstOrDefaultAsync();
+
+            if (activeSubscription == null)
+                return ServiceResult<DogRoutineScheduleDto>.FailureResult("Dog routine is available for members only.");
+
+            if (activeSubscription.SubscriptionPackage == null || !activeSubscription.SubscriptionPackage.HasHealthReminders)
+                return ServiceResult<DogRoutineScheduleDto>.FailureResult("Your current membership does not include dog routine reminders.");
+
+            var pet = await _unitOfWork.Repository<Pet>()
+                .QueryWithIncludes(p => p.Species)
+                .FirstOrDefaultAsync(p => p.Id == petId);
+
+            if (pet == null)
+                return ServiceResult<DogRoutineScheduleDto>.FailureResult("Pet not found");
+
+            if (pet.UserId != requestingUserId)
+            {
+                var user = await _unitOfWork.Users.GetUserWithRoleAsync(requestingUserId);
+                var role = user?.Role?.RoleName?.ToLowerInvariant();
+                if (role != "admin" && role != "staff")
+                    return ServiceResult<DogRoutineScheduleDto>.FailureResult("You don't have permission to view this pet's routine schedule");
+            }
+
+            var speciesName = pet.Species?.SpeciesName?.Trim().ToLowerInvariant() ?? string.Empty;
+            var isDog = speciesName.Contains("dog") || speciesName.Contains("cho") || speciesName.Contains("canine");
+
+            var schedule = new DogRoutineScheduleDto
+            {
+                PetId = pet.Id,
+                PetName = pet.PetName,
+                IsDog = isDog,
+                DateOfBirth = pet.DateOfBirth,
+                Note = pet.DateOfBirth.HasValue
+                    ? null
+                    : "Date of birth is missing, so due dates are estimated from today."
+            };
+
+            if (!isDog)
+            {
+                schedule.Note = "Routine currently supports dogs only.";
+                return ServiceResult<DogRoutineScheduleDto>.SuccessResult(schedule);
+            }
+
+            var vaccinations = await _unitOfWork.Repository<Vaccination>()
+                .FindAsync(v => v.PetId == petId);
+
+            var dewormingHistory = await _unitOfWork.Repository<HealthReminder>()
+                .FindAsync(r => r.PetId == petId
+                    && (EF.Functions.ILike(r.ReminderType, "%deworm%")
+                        || EF.Functions.ILike(r.ReminderType, "%tay giun%")
+                        || EF.Functions.ILike(r.ReminderTitle, "%deworm%")
+                        || EF.Functions.ILike(r.ReminderTitle, "%tay giun%")
+                        || EF.Functions.ILike(r.ReminderTitle, "%tẩy giun%")));
+
+            var today = DateTime.UtcNow.Date;
+            var baselineDate = pet.DateOfBirth?.Date ?? today;
+
+            schedule.Vaccinations = BuildVaccinationRoutine(vaccinations, baselineDate, today);
+            schedule.Deworming = BuildDewormingRoutine(dewormingHistory, baselineDate, today);
+
+            return ServiceResult<DogRoutineScheduleDto>.SuccessResult(schedule);
+        }
+        catch (Exception ex)
+        {
+            return ServiceResult<DogRoutineScheduleDto>.FailureResult($"Error retrieving dog routine schedule: {ex.Message}");
+        }
+    }
+
+    private static List<DogRoutineItemDto> BuildVaccinationRoutine(IEnumerable<Vaccination> vaccinations, DateTime baselineDate, DateTime today)
+    {
+        var vaccineList = vaccinations.OrderBy(v => v.VaccinationDate).ToList();
+
+        var dhppKeywords = new[] { "dhpp", "dhlpp", "distemper", "parvo" };
+        var rabiesKeywords = new[] { "rabies", "dai", "dại" };
+
+        var dhppHistory = vaccineList.Where(v => ContainsAny(v.VaccineName, dhppKeywords)).ToList();
+        var rabiesHistory = vaccineList.Where(v => ContainsAny(v.VaccineName, rabiesKeywords)).ToList();
+
+        var items = new List<DogRoutineItemDto>();
+
+        items.Add(BuildSeriesItem("Vaccination", "DHPP - First dose", baselineDate.AddDays(42), "One-time", dhppHistory.ElementAtOrDefault(0)?.VaccinationDate, today));
+        items.Add(BuildSeriesItem("Vaccination", "DHPP - Booster 1", baselineDate.AddDays(56), "One-time", dhppHistory.ElementAtOrDefault(1)?.VaccinationDate, today));
+        items.Add(BuildSeriesItem("Vaccination", "DHPP - Booster 2", baselineDate.AddDays(84), "One-time", dhppHistory.ElementAtOrDefault(2)?.VaccinationDate, today));
+        items.Add(BuildSeriesItem("Vaccination", "Rabies", baselineDate.AddDays(112), "One-time", rabiesHistory.FirstOrDefault()?.VaccinationDate, today));
+
+        var annualReference = rabiesHistory.OrderByDescending(v => v.VaccinationDate).FirstOrDefault()?.VaccinationDate;
+        var annualDueDate = annualReference.HasValue ? annualReference.Value.Date.AddYears(1) : baselineDate.AddDays(112).AddYears(1);
+        items.Add(new DogRoutineItemDto
+        {
+            Category = "Vaccination",
+            ItemName = "Annual booster (core vaccines)",
+            DueDate = annualDueDate,
+            LastCompletedDate = annualReference,
+            Frequency = "Every 12 months",
+            Status = CalculateStatus(annualDueDate, annualReference, today),
+            Source = annualReference.HasValue ? "vaccinations" : "estimated"
+        });
+
+        return items;
+    }
+
+    private static List<DogRoutineItemDto> BuildDewormingRoutine(IEnumerable<HealthReminder> reminders, DateTime baselineDate, DateTime today)
+    {
+        var history = reminders
+            .Where(r => r.IsCompleted)
+            .OrderByDescending(r => r.ReminderDate)
+            .ToList();
+
+        var ageInMonths = ((today.Year - baselineDate.Year) * 12) + today.Month - baselineDate.Month;
+        if (today.Day < baselineDate.Day)
+        {
+            ageInMonths--;
+        }
+
+        var isPuppy = ageInMonths < 6;
+        var intervalMonths = isPuppy ? 1 : 3;
+        var frequency = isPuppy ? "Every month until 6 months old" : "Every 3 months";
+
+        var lastCompleted = history.FirstOrDefault()?.ReminderDate.Date;
+        var firstRecommended = baselineDate.AddDays(14);
+
+        var dueDate = lastCompleted.HasValue
+            ? lastCompleted.Value.AddMonths(intervalMonths)
+            : (firstRecommended > today ? firstRecommended : today);
+
+        return new List<DogRoutineItemDto>
+        {
+            new DogRoutineItemDto
+            {
+                Category = "Deworming",
+                ItemName = "Routine deworming",
+                DueDate = dueDate,
+                LastCompletedDate = lastCompleted,
+                Frequency = frequency,
+                Status = CalculateStatus(dueDate, lastCompleted, today),
+                Source = lastCompleted.HasValue ? "health_reminders" : "estimated"
+            }
+        };
+    }
+
+    private static DogRoutineItemDto BuildSeriesItem(
+        string category,
+        string itemName,
+        DateTime dueDate,
+        string frequency,
+        DateTime? completedDate,
+        DateTime today)
+    {
+        return new DogRoutineItemDto
+        {
+            Category = category,
+            ItemName = itemName,
+            DueDate = dueDate,
+            LastCompletedDate = completedDate,
+            Frequency = frequency,
+            Status = CalculateStatus(dueDate, completedDate, today),
+            Source = completedDate.HasValue ? "vaccinations" : "estimated"
+        };
+    }
+
+    private static bool ContainsAny(string? value, IEnumerable<string> keywords)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return false;
+        var normalized = value.ToLowerInvariant();
+        return keywords.Any(normalized.Contains);
+    }
+
+    private static string CalculateStatus(DateTime dueDate, DateTime? completedDate, DateTime today)
+    {
+        if (completedDate.HasValue && completedDate.Value.Date >= dueDate.Date.AddDays(-45))
+            return "Completed";
+
+        if (dueDate.Date < today)
+            return "Overdue";
+
+        if (dueDate.Date <= today.AddDays(30))
+            return "DueSoon";
+
+        return "Upcoming";
+    }
 }

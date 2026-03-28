@@ -38,6 +38,19 @@ public class HealthRecordsController : ControllerBase
     }
 
     /// <summary>
+    /// Get routine dog vaccination and deworming schedule for a pet.
+    /// </summary>
+    [HttpGet("pet/{petId}/dog-routine")]
+    public async Task<IActionResult> GetDogRoutine(Guid petId)
+    {
+        var userId = GetUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        var result = await _healthRecordService.GetDogRoutineScheduleAsync(petId, userId);
+        return result.Success ? Ok(result) : BadRequest(result);
+    }
+
+    /// <summary>
     /// Get a single health record by ID
     /// </summary>
     [HttpGet("{id}")]
