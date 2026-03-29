@@ -207,12 +207,15 @@ public class HealthRecordService : IHealthRecordService
                     return ServiceResult<VaccinationDto>.FailureResult("You don't have permission to add vaccination for this pet");
             }
 
+            var vaccinationDate = EnsureUtc(dto.VaccinationDate ?? DateTime.UtcNow);
+            DateTime? nextDueDate = dto.NextDueDate.HasValue ? EnsureUtc(dto.NextDueDate.Value) : null;
+
             var entity = new Vaccination
             {
                 PetId = petId,
                 VaccineName = dto.VaccineName.Trim(),
-                VaccinationDate = dto.VaccinationDate ?? DateTime.UtcNow,
-                NextDueDate = dto.NextDueDate,
+                VaccinationDate = vaccinationDate,
+                NextDueDate = nextDueDate,
                 BatchNumber = dto.BatchNumber,
                 AdministeredBy = requestingUserId,
                 Notes = dto.Notes
@@ -238,8 +241,19 @@ public class HealthRecordService : IHealthRecordService
         }
         catch (Exception ex)
         {
-            return ServiceResult<VaccinationDto>.FailureResult($"Error recording vaccination: {ex.Message}");
+            var detail = ex.InnerException?.Message ?? ex.Message;
+            return ServiceResult<VaccinationDto>.FailureResult($"Error recording vaccination: {detail}");
         }
+    }
+
+    private static DateTime EnsureUtc(DateTime value)
+    {
+        return value.Kind switch
+        {
+            DateTimeKind.Utc => value,
+            DateTimeKind.Local => value.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(value, DateTimeKind.Utc)
+        };
     }
 
     public async Task<ServiceResult<DogRoutineScheduleDto>> GetDogRoutineScheduleAsync(Guid petId, Guid requestingUserId)
