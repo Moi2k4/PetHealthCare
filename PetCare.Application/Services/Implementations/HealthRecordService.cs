@@ -226,12 +226,62 @@ public class HealthRecordService : IHealthRecordService
         }
     }
 
+    public async Task<ServiceResult<IEnumerable<VaccinationDto>>> GetVaccinationsByPetAsync(Guid petId, Guid requestingUserId)
+    {
+        try
+        {
+            var pet = await _unitOfWork.Pets.GetByIdAsync(petId);
+            if (pet == null)
+                return ServiceResult<IEnumerable<VaccinationDto>>.FailureResult("Pet not found");
+
+            if (pet.UserId != requestingUserId)
+            {
+                var user = await _unitOfWork.Users.GetUserWithRoleAsync(requestingUserId);
+                var role = user?.Role?.RoleName?.ToLowerInvariant();
+                if (role != "admin" && role != "staff")
+                    return ServiceResult<IEnumerable<VaccinationDto>>.FailureResult("You don't have permission to view this pet's vaccination history");
+            }
+
+            var vaccinations = await _unitOfWork.Repository<Vaccination>()
+                .FindAsync(v => v.PetId == petId);
+
+            var result = vaccinations
+                .OrderByDescending(v => v.VaccinationDate)
+                .Select(v => new VaccinationDto
+                {
+                    Id = v.Id,
+                    PetId = v.PetId,
+                    VaccineCode = v.VaccineCode,
+                    VaccineName = v.VaccineName,
+                    VaccinationDate = v.VaccinationDate,
+                    NextDueDate = v.NextDueDate,
+                    BatchNumber = v.BatchNumber,
+                    AdministeredBy = v.AdministeredBy,
+                    Notes = v.Notes,
+                    CreatedAt = v.CreatedAt
+                })
+                .ToList();
+
+            return ServiceResult<IEnumerable<VaccinationDto>>.SuccessResult(result);
+        }
+        catch (Exception ex)
+        {
+            return ServiceResult<IEnumerable<VaccinationDto>>.FailureResult($"Error retrieving vaccination history: {ex.Message}");
+        }
+    }
+
     public async Task<ServiceResult<VaccinationDto>> AddVaccinationAsync(Guid petId, CreateVaccinationDto dto, Guid requestingUserId)
     {
         try
         {
             if (string.IsNullOrWhiteSpace(dto.VaccineName) && string.IsNullOrWhiteSpace(dto.VaccineCode))
                 return ServiceResult<VaccinationDto>.FailureResult("Vaccine code or vaccine name is required");
+
+            if (!string.IsNullOrWhiteSpace(dto.VaccineCode) && dto.VaccineCode.Trim().Length > 50)
+                return ServiceResult<VaccinationDto>.FailureResult("Vaccine code must be at most 50 characters");
+
+            if (!string.IsNullOrWhiteSpace(dto.Notes) && dto.Notes.Length > 1000)
+                return ServiceResult<VaccinationDto>.FailureResult("Notes must be at most 1000 characters");
 
             var pet = await _unitOfWork.Pets.GetByIdAsync(petId);
             if (pet == null)
@@ -246,9 +296,18 @@ public class HealthRecordService : IHealthRecordService
             }
 
             var vaccinationDate = EnsureUtc(dto.VaccinationDate ?? DateTime.UtcNow);
+            if (vaccinationDate.Date > DateTime.UtcNow.Date)
+                return ServiceResult<VaccinationDto>.FailureResult("Vaccination date cannot be in the future");
+
+            if (dto.NextDueDate.HasValue && EnsureUtc(dto.NextDueDate.Value).Date < vaccinationDate.Date)
+                return ServiceResult<VaccinationDto>.FailureResult("Next due date cannot be earlier than vaccination date");
+
             var catalogEntry = await ResolveCatalogEntryAsync(dto.VaccineCode, dto.VaccineName);
             var resolvedCode = catalogEntry?.Code;
             var resolvedName = catalogEntry?.DisplayName ?? dto.VaccineName.Trim();
+
+            if (resolvedName.Length > 255)
+                return ServiceResult<VaccinationDto>.FailureResult("Vaccine name must be at most 255 characters");
 
             if (string.IsNullOrWhiteSpace(resolvedName))
                 return ServiceResult<VaccinationDto>.FailureResult("Vaccine name is required");

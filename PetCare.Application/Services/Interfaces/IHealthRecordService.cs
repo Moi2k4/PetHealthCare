@@ -11,6 +11,7 @@ public interface IHealthRecordService
     Task<ServiceResult<HealthRecordDto>> UpdateAsync(Guid recordId, UpdateHealthRecordDto dto, Guid requestingUserId);
     Task<ServiceResult<bool>> DeleteAsync(Guid recordId, Guid requestingUserId);
     Task<ServiceResult<IEnumerable<VaccineCatalogDto>>> GetVaccineCatalogAsync();
+    Task<ServiceResult<IEnumerable<VaccinationDto>>> GetVaccinationsByPetAsync(Guid petId, Guid requestingUserId);
     Task<ServiceResult<VaccinationDto>> AddVaccinationAsync(Guid petId, CreateVaccinationDto dto, Guid requestingUserId);
     Task<ServiceResult<DogRoutineScheduleDto>> GetDogRoutineScheduleAsync(Guid petId, Guid requestingUserId);
 }

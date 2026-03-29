@@ -270,7 +270,7 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var context = scope.ServiceProvider.GetRequiredService<PetCareDbContext>();
-    var requiredRoles = new[] { "Customer", "Doctor" };
+    var requiredRoles = new[] { "Customer", "Doctor", "Admin", "Staff" };
 
     foreach (var roleName in requiredRoles)
     {

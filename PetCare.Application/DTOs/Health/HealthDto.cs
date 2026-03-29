@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace PetCare.Application.DTOs.Health;
 
 public class HealthRecordDto
@@ -67,11 +69,20 @@ public class DogRoutineItemDto
 
 public class CreateVaccinationDto
 {
+    [StringLength(50)]
     public string? VaccineCode { get; set; }
+
+    [Required]
+    [StringLength(255, MinimumLength = 2)]
     public string VaccineName { get; set; } = string.Empty;
+
     public DateTime? VaccinationDate { get; set; }
     public DateTime? NextDueDate { get; set; }
+
+    [StringLength(100)]
     public string? BatchNumber { get; set; }
+
+    [StringLength(1000)]
     public string? Notes { get; set; }
 }
 
