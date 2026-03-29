@@ -13,16 +13,6 @@ namespace PetCare.Infrastructure.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropColumn(
-                name: "created_at",
-                schema: "petcare",
-                table: "orders");
-
-            migrationBuilder.DropColumn(
-                name: "updated_at",
-                schema: "petcare",
-                table: "orders");
-
             migrationBuilder.AddColumn<string>(
                 name: "vaccine_code",
                 schema: "petcare",
@@ -81,21 +71,6 @@ namespace PetCare.Infrastructure.Migrations
                 name: "vaccine_code",
                 schema: "petcare",
                 table: "vaccinations");
-
-            migrationBuilder.AddColumn<DateTime>(
-                name: "created_at",
-                schema: "petcare",
-                table: "orders",
-                type: "timestamp with time zone",
-                nullable: false,
-                defaultValue: new DateTime(1, 1, 1, 0, 0, 0, 0, DateTimeKind.Unspecified));
-
-            migrationBuilder.AddColumn<DateTime>(
-                name: "updated_at",
-                schema: "petcare",
-                table: "orders",
-                type: "timestamp with time zone",
-                nullable: true);
         }
     }
 }

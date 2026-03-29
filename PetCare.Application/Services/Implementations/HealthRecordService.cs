@@ -250,6 +250,9 @@ public class HealthRecordService : IHealthRecordService
             var resolvedCode = catalogEntry?.Code;
             var resolvedName = catalogEntry?.DisplayName ?? dto.VaccineName.Trim();
 
+            if (string.IsNullOrWhiteSpace(resolvedName))
+                return ServiceResult<VaccinationDto>.FailureResult("Vaccine name is required");
+
             DateTime? nextDueDate = dto.NextDueDate.HasValue
                 ? EnsureUtc(dto.NextDueDate.Value)
                 : await EstimateNextDueDateAsync(petId, resolvedCode, resolvedName, vaccinationDate, catalogEntry?.DefaultIntervalDays);
