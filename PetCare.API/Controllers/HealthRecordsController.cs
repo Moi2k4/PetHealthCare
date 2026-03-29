@@ -25,6 +25,17 @@ public class HealthRecordsController : ControllerBase
     }
 
     /// <summary>
+    /// Get active vaccine catalog options for standardized selection.
+    /// </summary>
+    [HttpGet("vaccine-catalog")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GetVaccineCatalog()
+    {
+        var result = await _healthRecordService.GetVaccineCatalogAsync();
+        return result.Success ? Ok(result) : BadRequest(result);
+    }
+
+    /// <summary>
     /// Get all health records for a pet
     /// </summary>
     [HttpGet("pet/{petId}")]

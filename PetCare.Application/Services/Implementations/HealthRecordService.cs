@@ -1,5 +1,7 @@
 using AutoMapper;
 using Microsoft.EntityFrameworkCore;
+using System.Globalization;
+using System.Text;
 using PetCare.Application.Common;
 using PetCare.Application.DTOs.Health;
 using PetCare.Application.Services.Interfaces;
@@ -10,6 +12,16 @@ namespace PetCare.Application.Services.Implementations;
 
 public class HealthRecordService : IHealthRecordService
 {
+    private static readonly string[] DhppKeywords =
+    {
+        "dhpp", "dhlpp", "distemper", "parvo", "5 in 1", "5in1", "7 in 1", "7in1", "5 benh", "7 benh"
+    };
+
+    private static readonly string[] RabiesKeywords =
+    {
+        "rabies", "dai"
+    };
+
     private readonly IUnitOfWork _unitOfWork;
     private readonly IMapper _mapper;
 
@@ -188,12 +200,38 @@ public class HealthRecordService : IHealthRecordService
         }
     }
 
+    public async Task<ServiceResult<IEnumerable<VaccineCatalogDto>>> GetVaccineCatalogAsync()
+    {
+        try
+        {
+            var catalog = await _unitOfWork.Repository<VaccineCatalog>()
+                .FindAsync(v => v.IsActive);
+
+            var items = catalog
+                .OrderBy(v => v.DisplayName)
+                .Select(v => new VaccineCatalogDto
+                {
+                    Code = v.Code,
+                    DisplayName = v.DisplayName,
+                    Aliases = SplitAliases(v.Aliases),
+                    DefaultIntervalDays = v.DefaultIntervalDays
+                })
+                .ToList();
+
+            return ServiceResult<IEnumerable<VaccineCatalogDto>>.SuccessResult(items);
+        }
+        catch (Exception ex)
+        {
+            return ServiceResult<IEnumerable<VaccineCatalogDto>>.FailureResult($"Error retrieving vaccine catalog: {ex.Message}");
+        }
+    }
+
     public async Task<ServiceResult<VaccinationDto>> AddVaccinationAsync(Guid petId, CreateVaccinationDto dto, Guid requestingUserId)
     {
         try
         {
-            if (string.IsNullOrWhiteSpace(dto.VaccineName))
-                return ServiceResult<VaccinationDto>.FailureResult("Vaccine name is required");
+            if (string.IsNullOrWhiteSpace(dto.VaccineName) && string.IsNullOrWhiteSpace(dto.VaccineCode))
+                return ServiceResult<VaccinationDto>.FailureResult("Vaccine code or vaccine name is required");
 
             var pet = await _unitOfWork.Pets.GetByIdAsync(petId);
             if (pet == null)
@@ -208,12 +246,19 @@ public class HealthRecordService : IHealthRecordService
             }
 
             var vaccinationDate = EnsureUtc(dto.VaccinationDate ?? DateTime.UtcNow);
-            DateTime? nextDueDate = dto.NextDueDate.HasValue ? EnsureUtc(dto.NextDueDate.Value) : null;
+            var catalogEntry = await ResolveCatalogEntryAsync(dto.VaccineCode, dto.VaccineName);
+            var resolvedCode = catalogEntry?.Code;
+            var resolvedName = catalogEntry?.DisplayName ?? dto.VaccineName.Trim();
+
+            DateTime? nextDueDate = dto.NextDueDate.HasValue
+                ? EnsureUtc(dto.NextDueDate.Value)
+                : await EstimateNextDueDateAsync(petId, resolvedCode, resolvedName, vaccinationDate, catalogEntry?.DefaultIntervalDays);
 
             var entity = new Vaccination
             {
                 PetId = petId,
-                VaccineName = dto.VaccineName.Trim(),
+                VaccineCode = resolvedCode,
+                VaccineName = resolvedName,
                 VaccinationDate = vaccinationDate,
                 NextDueDate = nextDueDate,
                 BatchNumber = dto.BatchNumber,
@@ -228,6 +273,7 @@ public class HealthRecordService : IHealthRecordService
             {
                 Id = entity.Id,
                 PetId = entity.PetId,
+                VaccineCode = entity.VaccineCode,
                 VaccineName = entity.VaccineName,
                 VaccinationDate = entity.VaccinationDate,
                 NextDueDate = entity.NextDueDate,
@@ -237,7 +283,11 @@ public class HealthRecordService : IHealthRecordService
                 CreatedAt = entity.CreatedAt
             };
 
-            return ServiceResult<VaccinationDto>.SuccessResult(result, "Vaccination recorded successfully");
+            var message = nextDueDate.HasValue
+                ? $"Vaccination recorded successfully. Estimated next dose: {nextDueDate.Value:yyyy-MM-dd}"
+                : "Vaccination recorded successfully";
+
+            return ServiceResult<VaccinationDto>.SuccessResult(result, message);
         }
         catch (Exception ex)
         {
@@ -254,6 +304,34 @@ public class HealthRecordService : IHealthRecordService
             DateTimeKind.Local => value.ToUniversalTime(),
             _ => DateTime.SpecifyKind(value, DateTimeKind.Utc)
         };
+    }
+
+    private async Task<VaccineCatalog?> ResolveCatalogEntryAsync(string? vaccineCode, string vaccineName)
+    {
+        var catalog = await _unitOfWork.Repository<VaccineCatalog>()
+            .FindAsync(v => v.IsActive);
+
+        if (!string.IsNullOrWhiteSpace(vaccineCode))
+        {
+            var byCode = catalog.FirstOrDefault(v =>
+                string.Equals(v.Code, vaccineCode.Trim(), StringComparison.OrdinalIgnoreCase));
+            if (byCode != null) return byCode;
+        }
+
+        if (string.IsNullOrWhiteSpace(vaccineName)) return null;
+
+        var normalizedName = NormalizeText(vaccineName);
+        return catalog.FirstOrDefault(v =>
+            NormalizeText(v.DisplayName) == normalizedName ||
+            SplitAliases(v.Aliases).Any(alias => NormalizeText(alias) == normalizedName));
+    }
+
+    private static string[] SplitAliases(string? aliases)
+    {
+        if (string.IsNullOrWhiteSpace(aliases)) return [];
+        return aliases
+            .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToArray();
     }
 
     public async Task<ServiceResult<DogRoutineScheduleDto>> GetDogRoutineScheduleAsync(Guid petId, Guid requestingUserId)
@@ -434,8 +512,63 @@ public class HealthRecordService : IHealthRecordService
     private static bool ContainsAny(string? value, IEnumerable<string> keywords)
     {
         if (string.IsNullOrWhiteSpace(value)) return false;
-        var normalized = value.ToLowerInvariant();
-        return keywords.Any(normalized.Contains);
+        var normalizedValue = NormalizeText(value);
+        return keywords.Any(keyword => normalizedValue.Contains(NormalizeText(keyword)));
+    }
+
+    private async Task<DateTime?> EstimateNextDueDateAsync(
+        Guid petId,
+        string? vaccineCode,
+        string vaccineName,
+        DateTime vaccinationDate,
+        int? defaultIntervalDays)
+    {
+        // Keep explicit user input as source of truth; estimate only when next due is omitted.
+        if (string.Equals(vaccineCode, "RABIES", StringComparison.OrdinalIgnoreCase)
+            || ContainsAny(vaccineName, RabiesKeywords))
+        {
+            return vaccinationDate.Date.AddYears(1);
+        }
+
+        if (string.Equals(vaccineCode, "DHPP", StringComparison.OrdinalIgnoreCase)
+            || ContainsAny(vaccineName, DhppKeywords))
+        {
+            var existingVaccinations = await _unitOfWork.Repository<Vaccination>()
+                .FindAsync(v => v.PetId == petId);
+
+            var previousDoseCount = existingVaccinations.Count(v => ContainsAny(v.VaccineName, DhppKeywords));
+
+            // Practical schedule:
+            // dose 1 -> +14 days, dose 2 -> +28 days, then annual boosters.
+            if (previousDoseCount <= 0) return vaccinationDate.Date.AddDays(14);
+            if (previousDoseCount == 1) return vaccinationDate.Date.AddDays(28);
+            return vaccinationDate.Date.AddYears(1);
+        }
+
+        if (defaultIntervalDays.HasValue && defaultIntervalDays.Value > 0)
+        {
+            return vaccinationDate.Date.AddDays(defaultIntervalDays.Value);
+        }
+
+        // Unknown vaccine naming: no hard estimate to avoid unsafe reminders.
+        return null;
+    }
+
+    private static string NormalizeText(string value)
+    {
+        var normalized = value.Normalize(NormalizationForm.FormD);
+        var builder = new StringBuilder(normalized.Length);
+
+        foreach (var c in normalized)
+        {
+            var category = CharUnicodeInfo.GetUnicodeCategory(c);
+            if (category != UnicodeCategory.NonSpacingMark)
+            {
+                builder.Append(char.ToLowerInvariant(c));
+            }
+        }
+
+        return builder.ToString().Normalize(NormalizationForm.FormC);
     }
 
     private static string CalculateStatus(DateTime dueDate, DateTime? completedDate, DateTime today)

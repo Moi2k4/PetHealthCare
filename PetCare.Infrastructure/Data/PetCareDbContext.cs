@@ -20,6 +20,7 @@ public class PetCareDbContext : DbContext
     public DbSet<Pet> Pets { get; set; }
     public DbSet<HealthRecord> HealthRecords { get; set; }
     public DbSet<Vaccination> Vaccinations { get; set; }
+    public DbSet<VaccineCatalog> VaccineCatalogs { get; set; }
     public DbSet<HealthReminder> HealthReminders { get; set; }
 
     // E-Commerce
@@ -232,6 +233,7 @@ public class PetCareDbContext : DbContext
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Id).HasColumnName("id");
             entity.Property(e => e.PetId).HasColumnName("pet_id");
+            entity.Property(e => e.VaccineCode).HasColumnName("vaccine_code").HasMaxLength(50);
             entity.Property(e => e.VaccineName).HasColumnName("vaccine_name").IsRequired().HasMaxLength(255);
             entity.Property(e => e.VaccinationDate).HasColumnName("vaccination_date");
             entity.Property(e => e.NextDueDate).HasColumnName("next_due_date");
@@ -251,6 +253,29 @@ public class PetCareDbContext : DbContext
                 .OnDelete(DeleteBehavior.Restrict);
 
             entity.HasIndex(e => e.PetId);
+        });
+
+        modelBuilder.Entity<VaccineCatalog>(entity =>
+        {
+            entity.ToTable("vaccine_catalog");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.Code).HasColumnName("code").IsRequired().HasMaxLength(50);
+            entity.Property(e => e.DisplayName).HasColumnName("display_name").IsRequired().HasMaxLength(255);
+            entity.Property(e => e.Aliases).HasColumnName("aliases");
+            entity.Property(e => e.DefaultIntervalDays).HasColumnName("default_interval_days");
+            entity.Property(e => e.IsActive).HasColumnName("is_active");
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+
+            entity.HasIndex(e => e.Code).IsUnique();
+
+            entity.HasData(
+                new VaccineCatalog { Id = Guid.Parse("9ef90f99-4b40-4e09-9f4b-1c39b44ea001"), Code = "RABIES", DisplayName = "Rabies (Dai)", Aliases = "rabies;dai;dại;tiem dai;tiêm dại", DefaultIntervalDays = 365, IsActive = true, CreatedAt = new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc) },
+                new VaccineCatalog { Id = Guid.Parse("9ef90f99-4b40-4e09-9f4b-1c39b44ea002"), Code = "DHPP", DisplayName = "DHPP Core Vaccine", Aliases = "dhpp;dhlpp;5 in 1;5in1;7 in 1;7in1;distemper;parvo;care;ho cũi", DefaultIntervalDays = 365, IsActive = true, CreatedAt = new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc) },
+                new VaccineCatalog { Id = Guid.Parse("9ef90f99-4b40-4e09-9f4b-1c39b44ea003"), Code = "BORDETELLA", DisplayName = "Bordetella (Kennel Cough)", Aliases = "bordetella;kennel cough;ho cun cho;ho cũi chó", DefaultIntervalDays = 365, IsActive = true, CreatedAt = new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc) },
+                new VaccineCatalog { Id = Guid.Parse("9ef90f99-4b40-4e09-9f4b-1c39b44ea004"), Code = "LEPTO", DisplayName = "Leptospirosis", Aliases = "lepto;leptospirosis", DefaultIntervalDays = 365, IsActive = true, CreatedAt = new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc) },
+                new VaccineCatalog { Id = Guid.Parse("9ef90f99-4b40-4e09-9f4b-1c39b44ea005"), Code = "PARVO_ONLY", DisplayName = "Parvovirus", Aliases = "parvo;parvovirus", DefaultIntervalDays = 365, IsActive = true, CreatedAt = new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc) }
+            );
         });
 
         modelBuilder.Entity<HealthReminder>(entity =>
