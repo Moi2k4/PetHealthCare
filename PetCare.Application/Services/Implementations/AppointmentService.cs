@@ -222,7 +222,9 @@ public class AppointmentService : IAppointmentService
         }
         catch (Exception ex)
         {
-            return ServiceResult<AppointmentResponseDto>.FailureResult($"Error updating appointment status: {ex.Message}");
+            return ServiceResult<AppointmentResponseDto>.FailureResult(
+        $"Error updating appointment status: {ex.Message} | Inner: {ex.InnerException?.Message} | Deep: {ex.InnerException?.InnerException?.Message}"
+    );
         }
     }
 

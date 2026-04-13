@@ -28,7 +28,7 @@ else
     // Try current directory
     DotNetEnv.Env.Load();
 }
-
+r
 var builder = WebApplication.CreateBuilder(args);
 
 // Override configuration with environment variables
