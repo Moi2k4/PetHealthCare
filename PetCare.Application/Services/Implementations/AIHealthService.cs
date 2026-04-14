@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
@@ -318,41 +319,63 @@ public class AIHealthService : IAIHealthService
 
         foreach (var model in modelsToTry)
         {
-            var url = string.Format(GeminiBaseUrl, model, _apiKey);
+            const int maxAttemptsPerModel = 2;
 
-            using var request = new HttpRequestMessage(HttpMethod.Post, url);
-            request.Content = new StringContent(
-                JsonSerializer.Serialize(body),
-                Encoding.UTF8,
-                "application/json");
-
-            var response = await _httpClient.SendAsync(request);
-
-            if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            for (var attempt = 1; attempt <= maxAttemptsPerModel; attempt++)
             {
-                lastResponse = response;
-                continue;
+                var url = string.Format(GeminiBaseUrl, model, _apiKey);
+
+                using var request = new HttpRequestMessage(HttpMethod.Post, url);
+                request.Content = new StringContent(
+                    JsonSerializer.Serialize(body),
+                    Encoding.UTF8,
+                    "application/json");
+
+                var response = await _httpClient.SendAsync(request);
+
+                if (response.StatusCode == HttpStatusCode.NotFound)
+                {
+                    lastResponse = response;
+                    break;
+                }
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    lastResponse = response;
+
+                    var isLastAttempt = attempt == maxAttemptsPerModel;
+                    if (!isLastAttempt && IsRetryableGeminiStatus(response.StatusCode))
+                    {
+                        await Task.Delay(500 * attempt);
+                        continue;
+                    }
+
+                    if (IsRetryableGeminiStatus(response.StatusCode))
+                    {
+                        break;
+                    }
+
+                    response.EnsureSuccessStatusCode();
+                }
+
+                var json = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+                var text = json
+                    .GetProperty("candidates")[0]
+                    .GetProperty("content")
+                    .GetProperty("parts")[0]
+                    .GetProperty("text")
+                    .GetString() ?? string.Empty;
+
+                int tokensUsed = 0;
+                if (json.TryGetProperty("usageMetadata", out var usage) &&
+                    usage.TryGetProperty("totalTokenCount", out var tokenEl))
+                {
+                    tokensUsed = tokenEl.GetInt32();
+                }
+
+                return (text, tokensUsed, model);
             }
-
-            response.EnsureSuccessStatusCode();
-
-            var json = await response.Content.ReadFromJsonAsync<JsonElement>();
-
-            var text = json
-                .GetProperty("candidates")[0]
-                .GetProperty("content")
-                .GetProperty("parts")[0]
-                .GetProperty("text")
-                .GetString() ?? string.Empty;
-
-            int tokensUsed = 0;
-            if (json.TryGetProperty("usageMetadata", out var usage) &&
-                usage.TryGetProperty("totalTokenCount", out var tokenEl))
-            {
-                tokensUsed = tokenEl.GetInt32();
-            }
-
-            return (text, tokensUsed, model);
         }
 
         if (lastResponse != null)
@@ -361,6 +384,16 @@ public class AIHealthService : IAIHealthService
         }
 
         throw new InvalidOperationException("No Gemini model could be used for analysis.");
+    }
+
+    private static bool IsRetryableGeminiStatus(HttpStatusCode statusCode)
+    {
+        var code = (int)statusCode;
+        return statusCode == HttpStatusCode.TooManyRequests
+            || statusCode == HttpStatusCode.ServiceUnavailable
+            || statusCode == HttpStatusCode.BadGateway
+            || statusCode == HttpStatusCode.GatewayTimeout
+            || code >= 500;
     }
 
     private static string? ExtractSection(string text, params string[] sectionNames)
