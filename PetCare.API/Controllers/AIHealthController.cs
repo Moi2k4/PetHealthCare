@@ -35,7 +35,19 @@ public class AIHealthController : ControllerBase
         if (userId == Guid.Empty) return Unauthorized();
 
         var result = await _aiHealthService.AnalyseHealthAsync(request, userId);
-        return result.Success ? Ok(result) : BadRequest(result);
+        if (result.Success)
+        {
+            return Ok(result);
+        }
+
+        var message = result.Message ?? string.Empty;
+        if (message.Contains("Khong the ket noi den dich vu AI", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("Service Unavailable", StringComparison.OrdinalIgnoreCase))
+        {
+            return StatusCode(503, result);
+        }
+
+        return BadRequest(result);
     }
 
     /// <summary>
