@@ -195,6 +195,11 @@ public class AppointmentService : IAppointmentService
             if (appointment == null)
                 return ServiceResult<AppointmentResponseDto>.FailureResult("Appointment not found");
 
+            // Fix tất cả DateTime trong appointment về UTC
+            appointment.AppointmentDate = DateTime.SpecifyKind(appointment.AppointmentDate, DateTimeKind.Utc);
+            appointment.CreatedAt = DateTime.SpecifyKind(appointment.CreatedAt, DateTimeKind.Utc);
+            appointment.UpdatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc);
+
             appointment.AppointmentStatus = dto.Status;
             appointment.AssignedStaffId = doctorId;
 
@@ -211,7 +216,8 @@ public class AppointmentService : IAppointmentService
                 AppointmentId = appointment.Id,
                 Status = dto.Status,
                 Notes = dto.MedicalNotes ?? dto.CancellationReason,
-                UpdatedBy = doctorId
+                UpdatedBy = doctorId,
+                CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc) // fix luôn history
             };
             await _unitOfWork.Repository<AppointmentStatusHistory>().AddAsync(history);
 
@@ -222,9 +228,7 @@ public class AppointmentService : IAppointmentService
         }
         catch (Exception ex)
         {
-            return ServiceResult<AppointmentResponseDto>.FailureResult(
-        $"Error updating appointment status: {ex.Message} | Inner: {ex.InnerException?.Message} | Deep: {ex.InnerException?.InnerException?.Message}"
-    );
+            return ServiceResult<AppointmentResponseDto>.FailureResult($"Error: {ex.Message} | Inner: {ex.InnerException?.Message}");
         }
     }
 
