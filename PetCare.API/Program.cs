@@ -280,6 +280,8 @@ using (var scope = app.Services.CreateScope())
         }
         else
         {
+            await context.Database.MigrateAsync();
+
             var requiredRoles = new[] { "Customer", "Doctor", "Admin", "Staff" };
 
             foreach (var roleName in requiredRoles)
