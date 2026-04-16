@@ -418,7 +418,26 @@ public class AIHealthService : IAIHealthService
         var nextSection = text.IndexOf("**", start, StringComparison.Ordinal);
         var end = nextSection > start ? nextSection : text.Length;
 
-        return text[start..end].Trim();
+        var section = text[start..end].Trim();
+        return HasSubstantiveContent(section) ? section : null;
+    }
+
+    private static bool HasSubstantiveContent(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return false;
+        }
+
+        foreach (var c in text)
+        {
+            if (char.IsLetterOrDigit(c))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static decimal? ExtractConfidenceScore(string text)
@@ -493,9 +512,21 @@ public class AIHealthService : IAIHealthService
             }
 
             var summary = dto.Recommendations;
-            if (string.IsNullOrWhiteSpace(summary))
+            if (!HasSubstantiveContent(summary))
+            {
+                summary = ExtractSection(dto.AIResponse, "Khuyen nghi", "Recommendations");
+            }
+
+            if (!HasSubstantiveContent(summary))
             {
                 summary = dto.AIResponse;
+            }
+
+            summary = summary?.Trim();
+
+            if (!HasSubstantiveContent(summary))
+            {
+                summary = "No summary was generated. Please open the app to view the full AI analysis.";
             }
 
             if (summary.Length > 1200)
