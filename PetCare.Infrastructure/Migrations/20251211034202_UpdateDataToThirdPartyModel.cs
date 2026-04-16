@@ -59,20 +59,20 @@ namespace PetCare.Infrastructure.Migrations
                     SELECT id INTO v_consultation_id FROM petcare.service_categories WHERE category_name = 'Tư vấn sức khỏe' LIMIT 1;
                     
                     IF v_spa_id IS NOT NULL THEN
-                        INSERT INTO petcare.services (id, category_id, service_name, description, duration_minutes, price, is_active, created_at)
-                        SELECT gen_random_uuid(), v_spa_id, 'Spa thư giãn', 'Massage, chăm sóc da lông cao cấp', 60, 250000, true, NOW()
+                        INSERT INTO petcare.services (id, category_id, service_name, description, duration_minutes, price, is_home_service, is_active, created_at)
+                        SELECT gen_random_uuid(), v_spa_id, 'Spa thư giãn', 'Massage, chăm sóc da lông cao cấp', 60, 250000, false, true, NOW()
                         WHERE NOT EXISTS (SELECT 1 FROM petcare.services WHERE service_name = 'Spa thư giãn');
                     END IF;
                     
                     IF v_hotel_id IS NOT NULL THEN
-                        INSERT INTO petcare.services (id, category_id, service_name, description, duration_minutes, price, is_active, created_at)
-                        SELECT gen_random_uuid(), v_hotel_id, 'Lưu trú thú cưng', 'Dịch vụ lưu trú theo ngày', 1440, 200000, true, NOW()
+                        INSERT INTO petcare.services (id, category_id, service_name, description, duration_minutes, price, is_home_service, is_active, created_at)
+                        SELECT gen_random_uuid(), v_hotel_id, 'Lưu trú thú cưng', 'Dịch vụ lưu trú theo ngày', 1440, 200000, false, true, NOW()
                         WHERE NOT EXISTS (SELECT 1 FROM petcare.services WHERE service_name = 'Lưu trú thú cưng');
                     END IF;
                     
                     IF v_consultation_id IS NOT NULL THEN
-                        INSERT INTO petcare.services (id, category_id, service_name, description, duration_minutes, price, is_active, created_at)
-                        SELECT gen_random_uuid(), v_consultation_id, 'Tư vấn sức khỏe', 'Tư vấn và giới thiệu bác sĩ thú y uy tín', 30, 0, true, NOW()
+                        INSERT INTO petcare.services (id, category_id, service_name, description, duration_minutes, price, is_home_service, is_active, created_at)
+                        SELECT gen_random_uuid(), v_consultation_id, 'Tư vấn sức khỏe', 'Tư vấn và giới thiệu bác sĩ thú y uy tín', 30, 0, false, true, NOW()
                         WHERE NOT EXISTS (SELECT 1 FROM petcare.services WHERE service_name = 'Tư vấn sức khỏe');
                     END IF;
                 END $$;
