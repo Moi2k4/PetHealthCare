@@ -269,23 +269,39 @@ var app = builder.Build();
 // Ensure core roles exist so role assignment and authorization policies work.
 using (var scope = app.Services.CreateScope())
 {
-    var context = scope.ServiceProvider.GetRequiredService<PetCareDbContext>();
-    var requiredRoles = new[] { "Customer", "Doctor", "Admin", "Staff" };
-
-    foreach (var roleName in requiredRoles)
+    try
     {
-        var exists = await context.Roles.AnyAsync(r => r.RoleName == roleName);
-        if (!exists)
+        var context = scope.ServiceProvider.GetRequiredService<PetCareDbContext>();
+        var canConnect = await context.Database.CanConnectAsync();
+
+        if (!canConnect)
         {
-            context.Roles.Add(new PetCare.Domain.Entities.Role
+            Console.WriteLine("Startup warning: database unavailable. Skipping role initialization.");
+        }
+        else
+        {
+            var requiredRoles = new[] { "Customer", "Doctor", "Admin", "Staff" };
+
+            foreach (var roleName in requiredRoles)
             {
-                RoleName = roleName,
-                Description = $"Auto-generated role {roleName}"
-            });
+                var exists = await context.Roles.AnyAsync(r => r.RoleName == roleName);
+                if (!exists)
+                {
+                    context.Roles.Add(new PetCare.Domain.Entities.Role
+                    {
+                        RoleName = roleName,
+                        Description = $"Auto-generated role {roleName}"
+                    });
+                }
+            }
+
+            await context.SaveChangesAsync();
         }
     }
-
-    await context.SaveChangesAsync();
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Startup warning: role initialization skipped due to database error: {ex.Message}");
+    }
 }
 
 // Seed database on startup (comment out after first successful run)
