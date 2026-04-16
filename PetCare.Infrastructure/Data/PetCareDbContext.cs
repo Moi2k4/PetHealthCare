@@ -141,6 +141,15 @@ public class PetCareDbContext : DbContext
             entity.Property(e => e.SpeciesName).HasColumnName("species_name").IsRequired().HasMaxLength(100);
             entity.Property(e => e.Description).HasColumnName("description");
             entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+
+            entity.HasData(
+                new PetSpecies
+                {
+                    Id = Guid.Parse("7d8f6c44-3f6f-4a8c-9d1a-5b8fb78f1001"),
+                    SpeciesName = "Chó",
+                    Description = "Loài chó"
+                }
+            );
         });
 
         modelBuilder.Entity<PetBreed>(entity =>
@@ -157,6 +166,21 @@ public class PetCareDbContext : DbContext
                 .WithMany(s => s.Breeds)
                 .HasForeignKey(e => e.SpeciesId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasData(
+                new PetBreed { Id = Guid.Parse("7d8f6c44-3f6f-4a8c-9d1a-5b8fb78f2001"), SpeciesId = Guid.Parse("7d8f6c44-3f6f-4a8c-9d1a-5b8fb78f1001"), BreedName = "Golden Retriever", Characteristics = "Hiền, thông minh, thân thiện" },
+                new PetBreed { Id = Guid.Parse("7d8f6c44-3f6f-4a8c-9d1a-5b8fb78f2002"), SpeciesId = Guid.Parse("7d8f6c44-3f6f-4a8c-9d1a-5b8fb78f1001"), BreedName = "Labrador Retriever", Characteristics = "Ngoan, năng động, dễ huấn luyện" },
+                new PetBreed { Id = Guid.Parse("7d8f6c44-3f6f-4a8c-9d1a-5b8fb78f2003"), SpeciesId = Guid.Parse("7d8f6c44-3f6f-4a8c-9d1a-5b8fb78f1001"), BreedName = "German Shepherd", Characteristics = "Trung thành, cảnh giác, mạnh mẽ" },
+                new PetBreed { Id = Guid.Parse("7d8f6c44-3f6f-4a8c-9d1a-5b8fb78f2004"), SpeciesId = Guid.Parse("7d8f6c44-3f6f-4a8c-9d1a-5b8fb78f1001"), BreedName = "Poodle", Characteristics = "Thông minh, ít rụng lông, thân thiện" },
+                new PetBreed { Id = Guid.Parse("7d8f6c44-3f6f-4a8c-9d1a-5b8fb78f2005"), SpeciesId = Guid.Parse("7d8f6c44-3f6f-4a8c-9d1a-5b8fb78f1001"), BreedName = "Beagle", Characteristics = "Hiếu động, tò mò, thân thiện" },
+                new PetBreed { Id = Guid.Parse("7d8f6c44-3f6f-4a8c-9d1a-5b8fb78f2006"), SpeciesId = Guid.Parse("7d8f6c44-3f6f-4a8c-9d1a-5b8fb78f1001"), BreedName = "French Bulldog", Characteristics = "Nhỏ gọn, dễ nuôi, tình cảm" },
+                new PetBreed { Id = Guid.Parse("7d8f6c44-3f6f-4a8c-9d1a-5b8fb78f2007"), SpeciesId = Guid.Parse("7d8f6c44-3f6f-4a8c-9d1a-5b8fb78f1001"), BreedName = "Shih Tzu", Characteristics = "Hiền, đáng yêu, hợp nuôi trong nhà" },
+                new PetBreed { Id = Guid.Parse("7d8f6c44-3f6f-4a8c-9d1a-5b8fb78f2008"), SpeciesId = Guid.Parse("7d8f6c44-3f6f-4a8c-9d1a-5b8fb78f1001"), BreedName = "Pomeranian", Characteristics = "Nhỏ, lanh lợi, bộ lông dày" },
+                new PetBreed { Id = Guid.Parse("7d8f6c44-3f6f-4a8c-9d1a-5b8fb78f2009"), SpeciesId = Guid.Parse("7d8f6c44-3f6f-4a8c-9d1a-5b8fb78f1001"), BreedName = "Corgi", Characteristics = "Thân thiện, vui vẻ, chân ngắn" },
+                new PetBreed { Id = Guid.Parse("7d8f6c44-3f6f-4a8c-9d1a-5b8fb78f2010"), SpeciesId = Guid.Parse("7d8f6c44-3f6f-4a8c-9d1a-5b8fb78f1001"), BreedName = "Dachshund", Characteristics = "Dài người, nhanh nhẹn, bám chủ" },
+                new PetBreed { Id = Guid.Parse("7d8f6c44-3f6f-4a8c-9d1a-5b8fb78f2011"), SpeciesId = Guid.Parse("7d8f6c44-3f6f-4a8c-9d1a-5b8fb78f1001"), BreedName = "Siberian Husky", Characteristics = "Năng động, đẹp, cần vận động nhiều" },
+                new PetBreed { Id = Guid.Parse("7d8f6c44-3f6f-4a8c-9d1a-5b8fb78f2012"), SpeciesId = Guid.Parse("7d8f6c44-3f6f-4a8c-9d1a-5b8fb78f1001"), BreedName = "Pug", Characteristics = "Mặt xệ, thân thiện, thích ở gần người" }
+            );
         });
 
         modelBuilder.Entity<Pet>(entity =>
