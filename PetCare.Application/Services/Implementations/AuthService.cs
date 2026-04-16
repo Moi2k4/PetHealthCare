@@ -6,6 +6,7 @@ using Google.Apis.Auth;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
+using Npgsql;
 using PetCare.Application.Common;
 using PetCare.Application.DTOs.Auth;
 using PetCare.Application.DTOs.User;
@@ -258,6 +259,11 @@ public class AuthService : IAuthService
         }
         catch (Exception ex)
         {
+            if (ex is PostgresException pgEx && pgEx.SqlState == "XX000")
+            {
+                return ServiceResult<AuthResponseDto>.FailureResult("Google login failed: Database unavailable");
+            }
+
             return ServiceResult<AuthResponseDto>.FailureResult($"Google login failed: {ex.Message}");
         }
     }

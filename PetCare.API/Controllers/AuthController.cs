@@ -115,7 +115,21 @@ public class AuthController : ControllerBase
 
         var result = await _authService.GoogleLoginAsync(dto.IdToken);
         if (!result.Success)
+        {
+            if (!string.IsNullOrWhiteSpace(result.Message) &&
+                result.Message.Contains("Database unavailable", StringComparison.OrdinalIgnoreCase))
+            {
+                return StatusCode(StatusCodes.Status503ServiceUnavailable, result);
+            }
+
+            if (!string.IsNullOrWhiteSpace(result.Message) &&
+                result.Message.Contains("Invalid Google token", StringComparison.OrdinalIgnoreCase))
+            {
+                return Unauthorized(result);
+            }
+
             return BadRequest(result);
+        }
 
         return Ok(result);
     }
