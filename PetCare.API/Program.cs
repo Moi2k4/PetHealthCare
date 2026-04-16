@@ -358,6 +358,16 @@ END $$;";
             await policyCommand.ExecuteNonQueryAsync();
         }
 
+        var speciesCountCommand = connection.CreateCommand();
+        speciesCountCommand.CommandText = "SELECT COUNT(*) FROM petcare.pet_species;";
+        var speciesCount = Convert.ToInt32(await speciesCountCommand.ExecuteScalarAsync());
+
+        var breedCountCommand = connection.CreateCommand();
+        breedCountCommand.CommandText = "SELECT COUNT(*) FROM petcare.pet_breeds;";
+        var breedCount = Convert.ToInt32(await breedCountCommand.ExecuteScalarAsync());
+
+        Console.WriteLine($"Startup info: pet_species={speciesCount}, pet_breeds={breedCount}");
+
         if (shouldCloseConnection)
         {
             await connection.CloseAsync();
