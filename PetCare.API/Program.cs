@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using PetCare.API.Services;
 using PetCare.API.Security;
 using PetCare.Application.Common;
 using PetCare.Application.Services;
@@ -114,6 +115,7 @@ builder.Services.AddScoped<ISubscriptionService, SubscriptionService>();
 builder.Services.AddScoped<IBlogService, BlogService>();
 builder.Services.AddScoped<IReviewService, ReviewService>();
 builder.Services.AddScoped<IAppointmentService, AppointmentService>();
+builder.Services.AddHostedService<VaccinationReminderHostedService>();
 
 // Resend email service
 var resendApiKey = Environment.GetEnvironmentVariable("RESEND_API_KEY")
