@@ -2,7 +2,12 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PetCare.Application.DTOs.Health;
+using PetCare.Application.Common;
 using PetCare.Application.Services.Interfaces;
+using PetCare.Domain.Entities;
+using PetCare.Infrastructure.Data;
+using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 
 namespace PetCare.API.Controllers;
 
@@ -12,10 +17,12 @@ namespace PetCare.API.Controllers;
 public class HealthRecordsController : ControllerBase
 {
     private readonly IHealthRecordService _healthRecordService;
+    private readonly PetCareDbContext _dbContext;
 
-    public HealthRecordsController(IHealthRecordService healthRecordService)
+    public HealthRecordsController(IHealthRecordService healthRecordService, PetCareDbContext dbContext)
     {
         _healthRecordService = healthRecordService;
+        _dbContext = dbContext;
     }
 
     private Guid GetUserId()
@@ -88,6 +95,73 @@ public class HealthRecordsController : ControllerBase
     }
 
     /// <summary>
+    /// Update vaccination reminder status: booked, done, or remind_later.
+    /// </summary>
+    [HttpPost("pet/{petId}/vaccinations/{vaccinationId}/reminder-status")]
+    public async Task<IActionResult> UpdateVaccinationReminderStatus(
+        Guid petId,
+        Guid vaccinationId,
+        [FromBody] UpdateVaccinationReminderStatusRequest request)
+    {
+        var userId = GetUserId();
+        if (userId == Guid.Empty) return Unauthorized();
+
+        var status = (request.Status ?? string.Empty).Trim().ToLowerInvariant();
+        var allowed = new[] { "booked", "done", "remind_later" };
+        if (!allowed.Contains(status))
+        {
+            return BadRequest(ServiceResult<object>.FailureResult("Invalid status. Use booked, done, or remind_later."));
+        }
+
+        var vaccination = await _dbContext.Vaccinations
+            .Include(v => v.Pet)
+            .FirstOrDefaultAsync(v => v.Id == vaccinationId && v.PetId == petId);
+
+        if (vaccination == null)
+        {
+            return NotFound(ServiceResult<object>.FailureResult("Vaccination not found."));
+        }
+
+        if (vaccination.Pet.UserId != userId)
+        {
+            return Forbid();
+        }
+
+        var notePayload = JsonSerializer.Serialize(new
+        {
+            vaccinationId,
+            status,
+            note = request.Note,
+            updatedBy = userId,
+            updatedAt = DateTime.UtcNow
+        });
+
+        var log = new HealthReminder
+        {
+            Id = Guid.NewGuid(),
+            PetId = petId,
+            ReminderType = "vaccination_user_action",
+            ReminderTitle = $"Vaccination reminder marked as {status}",
+            ReminderDate = DateTime.UtcNow,
+            IsCompleted = status == "done",
+            Notes = notePayload,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        await _dbContext.HealthReminders.AddAsync(log);
+        await _dbContext.SaveChangesAsync();
+
+        var response = ServiceResult<object>.SuccessResult(new
+        {
+            petId,
+            vaccinationId,
+            status
+        }, "Vaccination reminder status updated.");
+
+        return Ok(response);
+    }
+
+    /// <summary>
     /// Get a single health record by ID
     /// </summary>
     [HttpGet("{id}")]
@@ -144,4 +218,10 @@ public class HealthRecordsController : ControllerBase
         var result = await _healthRecordService.DeleteAsync(id, userId);
         return result.Success ? Ok(result) : BadRequest(result);
     }
+}
+
+public class UpdateVaccinationReminderStatusRequest
+{
+    public string Status { get; set; } = string.Empty;
+    public string? Note { get; set; }
 }

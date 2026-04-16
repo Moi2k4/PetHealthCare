@@ -59,6 +59,7 @@ public class PetCareDbContext : DbContext
     public DbSet<ProductReview> ProductReviews { get; set; }
     public DbSet<ServiceReview> ServiceReviews { get; set; }
     public DbSet<Notification> Notifications { get; set; }
+    public DbSet<EmailTrackingEvent> EmailTrackingEvents { get; set; }
 
     // Subscriptions & AI
     public DbSet<SubscriptionPackage> SubscriptionPackages { get; set; }
@@ -85,9 +86,32 @@ public class PetCareDbContext : DbContext
         ConfigureBlogEntities(modelBuilder);
         ConfigureChatEntities(modelBuilder);
         ConfigureReviewEntities(modelBuilder);
+        ConfigureEmailEntities(modelBuilder);
         ConfigureSubscriptionEntities(modelBuilder);
         ConfigurePaymentEntities(modelBuilder);
         ConfigureVoucherEntities(modelBuilder);
+    }
+
+    private void ConfigureEmailEntities(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<EmailTrackingEvent>(entity =>
+        {
+            entity.ToTable("email_tracking_events");
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.EventType).HasColumnName("event_type").IsRequired().HasMaxLength(100);
+            entity.Property(e => e.EmailId).HasColumnName("email_id").HasMaxLength(255);
+            entity.Property(e => e.Recipient).HasColumnName("recipient").HasMaxLength(255);
+            entity.Property(e => e.ClickedUrl).HasColumnName("clicked_url");
+            entity.Property(e => e.EventTimestamp).HasColumnName("event_timestamp");
+            entity.Property(e => e.PayloadJson).HasColumnName("payload_json").IsRequired();
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+
+            entity.HasIndex(e => e.EventType);
+            entity.HasIndex(e => e.EmailId);
+            entity.HasIndex(e => e.Recipient);
+        });
     }
 
     private void ConfigureUserEntities(ModelBuilder modelBuilder)
