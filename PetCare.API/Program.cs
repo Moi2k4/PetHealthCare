@@ -332,6 +332,32 @@ using (var scope = app.Services.CreateScope())
             await enableRlsCommand.ExecuteNonQueryAsync();
         }
 
+        await using (var policyCommand = connection.CreateCommand())
+        {
+            policyCommand.CommandText = @"
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies
+        WHERE schemaname = 'petcare' AND tablename = 'pet_species' AND policyname = 'pet_species_public_read'
+    ) THEN
+        CREATE POLICY pet_species_public_read ON petcare.pet_species
+            FOR SELECT
+            USING (true);
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies
+        WHERE schemaname = 'petcare' AND tablename = 'pet_breeds' AND policyname = 'pet_breeds_public_read'
+    ) THEN
+        CREATE POLICY pet_breeds_public_read ON petcare.pet_breeds
+            FOR SELECT
+            USING (true);
+    END IF;
+END $$;";
+            await policyCommand.ExecuteNonQueryAsync();
+        }
+
         if (shouldCloseConnection)
         {
             await connection.CloseAsync();
