@@ -304,6 +304,63 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
+// Enable Row-Level Security on all tables in the petcare schema.
+// This is idempotent and keeps Supabase from exposing the "RLS is not enabled" warning.
+using (var scope = app.Services.CreateScope())
+{
+    try
+    {
+        var context = scope.ServiceProvider.GetRequiredService<PetCareDbContext>();
+        var canConnect = await context.Database.CanConnectAsync();
+
+        if (!canConnect)
+        {
+            Console.WriteLine("Startup warning: database unavailable. Skipping RLS enablement.");
+        }
+        else
+        {
+            var connection = context.Database.GetDbConnection();
+            var shouldCloseConnection = connection.State != System.Data.ConnectionState.Open;
+
+            if (shouldCloseConnection)
+            {
+                await connection.OpenAsync();
+            }
+
+            var tableNames = new List<string>();
+
+            await using (var command = connection.CreateCommand())
+            {
+                command.CommandText = "SELECT tablename FROM pg_tables WHERE schemaname = 'petcare' ORDER BY tablename;";
+                await using var reader = await command.ExecuteReaderAsync();
+
+                while (await reader.ReadAsync())
+                {
+                    tableNames.Add(reader.GetString(0));
+                }
+            }
+
+            foreach (var tableName in tableNames)
+            {
+                await using var enableRlsCommand = connection.CreateCommand();
+                enableRlsCommand.CommandText = $"ALTER TABLE petcare.\"{tableName.Replace("\"", "\"\"")}\" ENABLE ROW LEVEL SECURITY;";
+                await enableRlsCommand.ExecuteNonQueryAsync();
+            }
+
+            if (shouldCloseConnection)
+            {
+                await connection.CloseAsync();
+            }
+
+            Console.WriteLine($"Startup info: enabled RLS on {tableNames.Count} petcare tables.");
+        }
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Startup warning: RLS enablement skipped due to database error: {ex.Message}");
+    }
+}
+
 // Seed database on startup (comment out after first successful run)
 // Uncomment only when you need to re-seed the database
 /*
