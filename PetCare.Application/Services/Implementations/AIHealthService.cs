@@ -529,6 +529,8 @@ public class AIHealthService : IAIHealthService
                 summary = "No summary was generated. Please open the app to view the full AI analysis.";
             }
 
+            summary ??= string.Empty;
+
             if (summary.Length > 1200)
             {
                 summary = summary[..1200] + "...";
