@@ -15,6 +15,7 @@ using PetCare.Application.Services.Interfaces;
 using PetCare.Application.Services.Implementations;
 using PetCare.Infrastructure.Services;
 using PetCare.Domain.Interfaces;
+using Npgsql;
 using Resend;
 
 // Load environment variables from .env file
@@ -73,6 +74,22 @@ builder.Services.AddSwaggerGen(options =>
 // Database configuration
 var connectionString = Environment.GetEnvironmentVariable("SUPABASE_CONNECTION_STRING") 
     ?? builder.Configuration.GetConnectionString("SupabaseConnection");
+
+var runDbBootstrapOnStartup = GetBooleanSetting(
+    "RUN_DB_BOOTSTRAP_ON_STARTUP",
+    builder.Environment.IsDevelopment());
+
+var disableDbUserSafetyCheck = GetBooleanSetting(
+    "DISABLE_DB_USER_SAFETY_CHECK",
+    false);
+
+if (builder.Environment.IsProduction() && !disableDbUserSafetyCheck && IsPrivilegedDbUser(connectionString))
+{
+    throw new InvalidOperationException(
+        "Unsafe DB configuration: production is using a privileged database account. " +
+        "Use a least-privilege app user for SUPABASE_CONNECTION_STRING, or set " +
+        "DISABLE_DB_USER_SAFETY_CHECK=true only as a temporary emergency override.");
+}
 
 if (builder.Environment.IsDevelopment())
 {
@@ -268,75 +285,77 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-// Ensure core roles exist so role assignment and authorization policies work.
-using (var scope = app.Services.CreateScope())
+if (runDbBootstrapOnStartup)
 {
-    try
+    // Ensure core roles exist so role assignment and authorization policies work.
+    using (var scope = app.Services.CreateScope())
     {
-        var context = scope.ServiceProvider.GetRequiredService<PetCareDbContext>();
-        await context.Database.MigrateAsync();
-
-        var requiredRoles = new[] { "Customer", "Doctor", "Admin", "Staff" };
-
-        foreach (var roleName in requiredRoles)
+        try
         {
-            var exists = await context.Roles.AnyAsync(r => r.RoleName == roleName);
-            if (!exists)
+            var context = scope.ServiceProvider.GetRequiredService<PetCareDbContext>();
+            await context.Database.MigrateAsync();
+
+            var requiredRoles = new[] { "Customer", "Doctor", "Admin", "Staff" };
+
+            foreach (var roleName in requiredRoles)
             {
-                context.Roles.Add(new PetCare.Domain.Entities.Role
+                var exists = await context.Roles.AnyAsync(r => r.RoleName == roleName);
+                if (!exists)
                 {
-                    RoleName = roleName,
-                    Description = $"Auto-generated role {roleName}"
-                });
+                    context.Roles.Add(new PetCare.Domain.Entities.Role
+                    {
+                        RoleName = roleName,
+                        Description = $"Auto-generated role {roleName}"
+                    });
+                }
             }
+
+            await context.SaveChangesAsync();
         }
-
-        await context.SaveChangesAsync();
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"Startup warning: role initialization skipped due to database error: {ex.Message}");
-    }
-}
-
-// Enable Row-Level Security on all tables in the petcare schema.
-// This is idempotent and keeps Supabase from exposing the "RLS is not enabled" warning.
-using (var scope = app.Services.CreateScope())
-{
-    try
-    {
-        var context = scope.ServiceProvider.GetRequiredService<PetCareDbContext>();
-        var connection = context.Database.GetDbConnection();
-        var shouldCloseConnection = connection.State != System.Data.ConnectionState.Open;
-
-        if (shouldCloseConnection)
+        catch (Exception ex)
         {
-            await connection.OpenAsync();
+            Console.WriteLine($"Startup warning: role initialization skipped due to database error: {ex.Message}");
         }
+    }
 
-        var tableNames = new List<string>();
-
-        await using (var command = connection.CreateCommand())
+    // Enable Row-Level Security on all tables in the petcare schema.
+    // This is idempotent and keeps Supabase from exposing the "RLS is not enabled" warning.
+    using (var scope = app.Services.CreateScope())
+    {
+        try
         {
-            command.CommandText = "SELECT tablename FROM pg_tables WHERE schemaname = 'petcare' ORDER BY tablename;";
-            await using var reader = await command.ExecuteReaderAsync();
+            var context = scope.ServiceProvider.GetRequiredService<PetCareDbContext>();
+            var connection = context.Database.GetDbConnection();
+            var shouldCloseConnection = connection.State != System.Data.ConnectionState.Open;
 
-            while (await reader.ReadAsync())
+            if (shouldCloseConnection)
             {
-                tableNames.Add(reader.GetString(0));
+                await connection.OpenAsync();
             }
-        }
 
-        foreach (var tableName in tableNames)
-        {
-            await using var enableRlsCommand = connection.CreateCommand();
-            enableRlsCommand.CommandText = $"ALTER TABLE petcare.\"{tableName.Replace("\"", "\"\"")}\" ENABLE ROW LEVEL SECURITY;";
-            await enableRlsCommand.ExecuteNonQueryAsync();
-        }
+            var tableNames = new List<string>();
 
-        await using (var policyCommand = connection.CreateCommand())
-        {
-            policyCommand.CommandText = @"
+            await using (var command = connection.CreateCommand())
+            {
+                command.CommandText = "SELECT tablename FROM pg_tables WHERE schemaname = 'petcare' ORDER BY tablename;";
+                await using var reader = await command.ExecuteReaderAsync();
+
+                while (await reader.ReadAsync())
+                {
+                    tableNames.Add(reader.GetString(0));
+                }
+            }
+
+            foreach (var tableName in tableNames)
+            {
+                await using var enableRlsCommand = connection.CreateCommand();
+                enableRlsCommand.CommandText = $"ALTER TABLE petcare.\"{tableName.Replace("\"", "\"\"")}\" ENABLE ROW LEVEL SECURITY;";
+                await enableRlsCommand.ExecuteNonQueryAsync();
+            }
+
+            await using (var policyCommand = connection.CreateCommand())
+            {
+                policyCommand.CommandText = @"
 DO $$
 BEGIN
     IF NOT EXISTS (
@@ -357,30 +376,35 @@ BEGIN
             USING (true);
     END IF;
 END $$;";
-            await policyCommand.ExecuteNonQueryAsync();
+                await policyCommand.ExecuteNonQueryAsync();
+            }
+
+            var speciesCountCommand = connection.CreateCommand();
+            speciesCountCommand.CommandText = "SELECT COUNT(*) FROM petcare.pet_species;";
+            var speciesCount = Convert.ToInt32(await speciesCountCommand.ExecuteScalarAsync());
+
+            var breedCountCommand = connection.CreateCommand();
+            breedCountCommand.CommandText = "SELECT COUNT(*) FROM petcare.pet_breeds;";
+            var breedCount = Convert.ToInt32(await breedCountCommand.ExecuteScalarAsync());
+
+            Console.WriteLine($"Startup info: pet_species={speciesCount}, pet_breeds={breedCount}");
+
+            if (shouldCloseConnection)
+            {
+                await connection.CloseAsync();
+            }
+
+            Console.WriteLine($"Startup info: enabled RLS on {tableNames.Count} petcare tables.");
         }
-
-        var speciesCountCommand = connection.CreateCommand();
-        speciesCountCommand.CommandText = "SELECT COUNT(*) FROM petcare.pet_species;";
-        var speciesCount = Convert.ToInt32(await speciesCountCommand.ExecuteScalarAsync());
-
-        var breedCountCommand = connection.CreateCommand();
-        breedCountCommand.CommandText = "SELECT COUNT(*) FROM petcare.pet_breeds;";
-        var breedCount = Convert.ToInt32(await breedCountCommand.ExecuteScalarAsync());
-
-        Console.WriteLine($"Startup info: pet_species={speciesCount}, pet_breeds={breedCount}");
-
-        if (shouldCloseConnection)
+        catch (Exception ex)
         {
-            await connection.CloseAsync();
+            Console.WriteLine($"Startup warning: RLS enablement skipped due to database error: {ex.Message}");
         }
-
-        Console.WriteLine($"Startup info: enabled RLS on {tableNames.Count} petcare tables.");
     }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"Startup warning: RLS enablement skipped due to database error: {ex.Message}");
-    }
+}
+else
+{
+    Console.WriteLine("Startup info: DB bootstrap skipped (RUN_DB_BOOTSTRAP_ON_STARTUP=false).");
 }
 
 // Seed database on startup (comment out after first successful run)
@@ -413,3 +437,57 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+static bool GetBooleanSetting(string key, bool defaultValue)
+{
+    var rawValue = Environment.GetEnvironmentVariable(key);
+    if (string.IsNullOrWhiteSpace(rawValue))
+    {
+        return defaultValue;
+    }
+
+    if (bool.TryParse(rawValue, out var parsedBool))
+    {
+        return parsedBool;
+    }
+
+    if (rawValue == "1")
+    {
+        return true;
+    }
+
+    if (rawValue == "0")
+    {
+        return false;
+    }
+
+    return defaultValue;
+}
+
+static bool IsPrivilegedDbUser(string? connectionString)
+{
+    if (string.IsNullOrWhiteSpace(connectionString))
+    {
+        return false;
+    }
+
+    try
+    {
+        var builder = new NpgsqlConnectionStringBuilder(connectionString);
+        var username = builder.Username?.Trim();
+
+        if (string.IsNullOrWhiteSpace(username))
+        {
+            return false;
+        }
+
+        return username.StartsWith("postgres", StringComparison.OrdinalIgnoreCase)
+            || username.StartsWith("supabase_admin", StringComparison.OrdinalIgnoreCase)
+            || username.Equals("admin", StringComparison.OrdinalIgnoreCase)
+            || username.Equals("root", StringComparison.OrdinalIgnoreCase);
+    }
+    catch
+    {
+        return false;
+    }
+}
