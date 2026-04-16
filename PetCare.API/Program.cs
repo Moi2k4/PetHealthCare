@@ -272,33 +272,24 @@ using (var scope = app.Services.CreateScope())
     try
     {
         var context = scope.ServiceProvider.GetRequiredService<PetCareDbContext>();
-        var canConnect = await context.Database.CanConnectAsync();
+        await context.Database.MigrateAsync();
 
-        if (!canConnect)
+        var requiredRoles = new[] { "Customer", "Doctor", "Admin", "Staff" };
+
+        foreach (var roleName in requiredRoles)
         {
-            Console.WriteLine("Startup warning: database unavailable. Skipping role initialization.");
-        }
-        else
-        {
-            await context.Database.MigrateAsync();
-
-            var requiredRoles = new[] { "Customer", "Doctor", "Admin", "Staff" };
-
-            foreach (var roleName in requiredRoles)
+            var exists = await context.Roles.AnyAsync(r => r.RoleName == roleName);
+            if (!exists)
             {
-                var exists = await context.Roles.AnyAsync(r => r.RoleName == roleName);
-                if (!exists)
+                context.Roles.Add(new PetCare.Domain.Entities.Role
                 {
-                    context.Roles.Add(new PetCare.Domain.Entities.Role
-                    {
-                        RoleName = roleName,
-                        Description = $"Auto-generated role {roleName}"
-                    });
-                }
+                    RoleName = roleName,
+                    Description = $"Auto-generated role {roleName}"
+                });
             }
-
-            await context.SaveChangesAsync();
         }
+
+        await context.SaveChangesAsync();
     }
     catch (Exception ex)
     {
@@ -313,49 +304,40 @@ using (var scope = app.Services.CreateScope())
     try
     {
         var context = scope.ServiceProvider.GetRequiredService<PetCareDbContext>();
-        var canConnect = await context.Database.CanConnectAsync();
+        var connection = context.Database.GetDbConnection();
+        var shouldCloseConnection = connection.State != System.Data.ConnectionState.Open;
 
-        if (!canConnect)
+        if (shouldCloseConnection)
         {
-            Console.WriteLine("Startup warning: database unavailable. Skipping RLS enablement.");
+            await connection.OpenAsync();
         }
-        else
+
+        var tableNames = new List<string>();
+
+        await using (var command = connection.CreateCommand())
         {
-            var connection = context.Database.GetDbConnection();
-            var shouldCloseConnection = connection.State != System.Data.ConnectionState.Open;
+            command.CommandText = "SELECT tablename FROM pg_tables WHERE schemaname = 'petcare' ORDER BY tablename;";
+            await using var reader = await command.ExecuteReaderAsync();
 
-            if (shouldCloseConnection)
+            while (await reader.ReadAsync())
             {
-                await connection.OpenAsync();
+                tableNames.Add(reader.GetString(0));
             }
-
-            var tableNames = new List<string>();
-
-            await using (var command = connection.CreateCommand())
-            {
-                command.CommandText = "SELECT tablename FROM pg_tables WHERE schemaname = 'petcare' ORDER BY tablename;";
-                await using var reader = await command.ExecuteReaderAsync();
-
-                while (await reader.ReadAsync())
-                {
-                    tableNames.Add(reader.GetString(0));
-                }
-            }
-
-            foreach (var tableName in tableNames)
-            {
-                await using var enableRlsCommand = connection.CreateCommand();
-                enableRlsCommand.CommandText = $"ALTER TABLE petcare.\"{tableName.Replace("\"", "\"\"")}\" ENABLE ROW LEVEL SECURITY;";
-                await enableRlsCommand.ExecuteNonQueryAsync();
-            }
-
-            if (shouldCloseConnection)
-            {
-                await connection.CloseAsync();
-            }
-
-            Console.WriteLine($"Startup info: enabled RLS on {tableNames.Count} petcare tables.");
         }
+
+        foreach (var tableName in tableNames)
+        {
+            await using var enableRlsCommand = connection.CreateCommand();
+            enableRlsCommand.CommandText = $"ALTER TABLE petcare.\"{tableName.Replace("\"", "\"\"")}\" ENABLE ROW LEVEL SECURITY;";
+            await enableRlsCommand.ExecuteNonQueryAsync();
+        }
+
+        if (shouldCloseConnection)
+        {
+            await connection.CloseAsync();
+        }
+
+        Console.WriteLine($"Startup info: enabled RLS on {tableNames.Count} petcare tables.");
     }
     catch (Exception ex)
     {
