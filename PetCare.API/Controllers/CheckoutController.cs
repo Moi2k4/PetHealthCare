@@ -118,6 +118,55 @@ public class CheckoutController : ControllerBase
         });
     }
 
+    [HttpGet("active-vouchers")]
+    public async Task<IActionResult> GetActiveVouchers([FromQuery] int limit = 6)
+    {
+        var userId = GetUserId();
+        var now = DateTime.UtcNow;
+        var safeLimit = Math.Clamp(limit, 1, 20);
+
+        var usedVoucherIds = await _context.VoucherUsages
+            .AsNoTracking()
+            .Where(vu => vu.UserId == userId)
+            .Select(vu => vu.VoucherId)
+            .Distinct()
+            .ToListAsync();
+
+        var vouchers = await _context.Vouchers
+            .AsNoTracking()
+            .Where(v => v.IsActive
+                && v.ValidFrom <= now
+                && v.ValidTo >= now
+                && (!v.UsageLimit.HasValue || v.UsedCount < v.UsageLimit.Value)
+                && !usedVoucherIds.Contains(v.Id))
+            .OrderBy(v => v.ValidTo)
+            .ThenByDescending(v => v.CreatedAt)
+            .Take(safeLimit)
+            .Select(v => new
+            {
+                v.Id,
+                v.Code,
+                v.Name,
+                v.Description,
+                v.DiscountType,
+                v.DiscountValue,
+                v.MinimumOrderAmount,
+                v.MaximumDiscountAmount,
+                v.ValidTo,
+                RemainingUses = v.UsageLimit.HasValue
+                    ? Math.Max(0, v.UsageLimit.Value - v.UsedCount)
+                    : (int?)null
+            })
+            .ToListAsync();
+
+        return Ok(new
+        {
+            success = true,
+            message = "Active vouchers retrieved successfully",
+            data = vouchers
+        });
+    }
+
     [HttpPost("place-order")]
     public async Task<IActionResult> PlaceOrder([FromBody] CheckoutDto dto)
     {
