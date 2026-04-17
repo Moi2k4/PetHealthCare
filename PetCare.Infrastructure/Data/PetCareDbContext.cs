@@ -484,9 +484,9 @@ public class PetCareDbContext : DbContext
             entity.Property(e => e.ShippingName).HasColumnName("shipping_name").IsRequired().HasMaxLength(255);
             entity.Property(e => e.Notes).HasColumnName("notes");
             entity.Property(e => e.OrderedAt).HasColumnName("ordered_at");
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
 
-            // Production orders table currently does not include created_at/updated_at.
-            entity.Ignore(e => e.CreatedAt);
+            // Some environments still do not expose updated_at on orders.
             entity.Ignore(e => e.UpdatedAt);
 
             entity.HasOne(e => e.User)
