@@ -467,27 +467,27 @@ public class CheckoutController : ControllerBase
 
         if (voucher == null)
         {
-            return (false, "Voucher code does not exist.", 0m, null);
+            return (false, "Mã voucher không tồn tại.", 0m, null);
         }
 
         if (!voucher.IsActive)
         {
-            return (false, "Voucher is not active.", 0m, null);
+            return (false, "Voucher hiện không hoạt động.", 0m, null);
         }
 
         if (voucher.ValidFrom > now || voucher.ValidTo < now)
         {
-            return (false, "Voucher is expired or not yet valid.", 0m, null);
+            return (false, "Voucher đã hết hạn hoặc chưa đến thời gian áp dụng.", 0m, null);
         }
 
         if (voucher.UsageLimit.HasValue && voucher.UsedCount >= voucher.UsageLimit.Value)
         {
-            return (false, "Voucher usage limit has been reached.", 0m, null);
+            return (false, "Voucher đã đạt giới hạn sử dụng.", 0m, null);
         }
 
         if (voucher.MinimumOrderAmount.HasValue && totalAmount < voucher.MinimumOrderAmount.Value)
         {
-            return (false, $"Order must be at least {voucher.MinimumOrderAmount.Value:N0} VND to use this voucher.", 0m, null);
+            return (false, $"Đơn hàng cần tối thiểu {voucher.MinimumOrderAmount.Value:N0} VND để áp dụng voucher.", 0m, null);
         }
 
         var alreadyUsedByUser = await _context.VoucherUsages
@@ -495,7 +495,7 @@ public class CheckoutController : ControllerBase
 
         if (alreadyUsedByUser)
         {
-            return (false, "You already used this voucher.", 0m, null);
+            return (false, "Bạn đã sử dụng voucher này trước đó.", 0m, null);
         }
 
         var baseAmount = Math.Max(0m, totalAmount - membershipDiscountAmount);
@@ -518,10 +518,10 @@ public class CheckoutController : ControllerBase
         discountAmount = Math.Min(discountAmount, baseAmount);
         if (discountAmount <= 0)
         {
-            return (false, "Voucher discount value is not applicable to this order.", 0m, null);
+            return (false, "Giá trị giảm của voucher không áp dụng được cho đơn hàng này.", 0m, null);
         }
 
-        return (true, "Voucher applied successfully.", discountAmount, voucher);
+        return (true, "Áp dụng voucher thành công.", discountAmount, voucher);
     }
 
     [HttpPost("confirm-payment")]
