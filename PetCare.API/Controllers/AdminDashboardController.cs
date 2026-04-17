@@ -306,6 +306,21 @@ public class AdminDashboardController : ControllerBase
                 u.FullName,
                 u.Email,
                 RoleName = u.Role != null ? u.Role.RoleName : null,
+                MembershipStatus = u.UserSubscriptions
+                    .Where(s => s.IsActive)
+                    .OrderByDescending(s => s.EndDate ?? DateTime.MaxValue)
+                    .Select(s => s.Status)
+                    .FirstOrDefault(),
+                MembershipPackageName = u.UserSubscriptions
+                    .Where(s => s.IsActive)
+                    .OrderByDescending(s => s.EndDate ?? DateTime.MaxValue)
+                    .Select(s => s.SubscriptionPackage.Name)
+                    .FirstOrDefault(),
+                MembershipEndDate = u.UserSubscriptions
+                    .Where(s => s.IsActive)
+                    .OrderByDescending(s => s.EndDate ?? DateTime.MaxValue)
+                    .Select(s => s.EndDate)
+                    .FirstOrDefault(),
                 u.IsActive,
                 u.CreatedAt
             })
