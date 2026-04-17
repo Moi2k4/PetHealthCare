@@ -41,18 +41,50 @@ public class ProductService : IProductService
         }
     }
 
-    public async Task<ServiceResult<PagedResult<ProductDto>>> GetProductsAsync(int page, int pageSize)
+    public async Task<ServiceResult<PagedResult<ProductDto>>> GetProductsAsync(
+        int page,
+        int pageSize,
+        string? searchTerm = null,
+        Guid? categoryId = null,
+        bool? isActive = null,
+        bool includeInactive = false)
     {
         try
         {
-            (IEnumerable<Product> products, int totalCount) = await _unitOfWork.Products.GetPagedAsync(
-                page,
-                pageSize,
-                filter: p => p.IsActive,
-                orderBy: q => q.OrderBy(p => p.ProductName),
-                p => p.Category!,
-                p => p.Images
-            );
+            var query = _unitOfWork.Products
+                .QueryWithIncludes(p => p.Category!, p => p.Images)
+                .AsQueryable();
+
+            if (!includeInactive && !isActive.HasValue)
+            {
+                query = query.Where(p => p.IsActive);
+            }
+
+            if (isActive.HasValue)
+            {
+                query = query.Where(p => p.IsActive == isActive.Value);
+            }
+
+            if (categoryId.HasValue && categoryId.Value != Guid.Empty)
+            {
+                query = query.Where(p => p.CategoryId == categoryId.Value);
+            }
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                var keyword = searchTerm.Trim().ToLower();
+                query = query.Where(p =>
+                    p.ProductName.ToLower().Contains(keyword) ||
+                    (p.Sku != null && p.Sku.ToLower().Contains(keyword)));
+            }
+
+            var totalCount = await query.CountAsync();
+
+            var products = await query
+                .OrderBy(p => p.ProductName)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
 
             var productDtos = _mapper.Map<IEnumerable<ProductDto>>(products);
             

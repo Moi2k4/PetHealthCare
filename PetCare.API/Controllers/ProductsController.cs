@@ -36,13 +36,36 @@ public class ProductsController : ControllerBase
     }
 
     /// <summary>
-    /// Get all products with pagination
+    /// Get products with pagination and optional filters
     /// </summary>
     [HttpGet]
     [AllowAnonymous] // Public read access
-    public async Task<IActionResult> GetAll([FromQuery] int page = 1, [FromQuery] int pageSize = 10)
+    public async Task<IActionResult> GetAll(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 10,
+        [FromQuery] string? searchTerm = null,
+        [FromQuery] Guid? categoryId = null,
+        [FromQuery] bool? isActive = null,
+        [FromQuery] bool includeInactive = false)
     {
-        var result = await _productService.GetProductsAsync(page, pageSize);
+        // Only staff/admin can request inactive products.
+        var canViewInactive = User.IsInRole("Admin") || User.IsInRole("Staff");
+        if (!canViewInactive)
+        {
+            includeInactive = false;
+            if (!isActive.HasValue)
+            {
+                isActive = true;
+            }
+        }
+
+        var result = await _productService.GetProductsAsync(
+            page,
+            pageSize,
+            searchTerm,
+            categoryId,
+            isActive,
+            includeInactive);
         return Ok(result);
     }
 
