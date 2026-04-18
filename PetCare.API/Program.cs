@@ -311,6 +311,7 @@ if (runDbBootstrapOnStartup)
             }
 
             await context.SaveChangesAsync();
+
         }
         catch (Exception ex)
         {
@@ -405,6 +406,32 @@ END $$;";
 else
 {
     Console.WriteLine("Startup info: DB bootstrap skipped (RUN_DB_BOOTSTRAP_ON_STARTUP=false).");
+}
+
+using (var scope = app.Services.CreateScope())
+{
+    try
+    {
+        var context = scope.ServiceProvider.GetRequiredService<PetCareDbContext>();
+        var legacyMembershipPackages = await context.SubscriptionPackages
+            .Where(p => p.IsActive && (p.Price == 5000m || p.Name == "5K"))
+            .ToListAsync();
+
+        if (legacyMembershipPackages.Count > 0)
+        {
+            foreach (var package in legacyMembershipPackages)
+            {
+                package.Price = 30000m;
+            }
+
+            await context.SaveChangesAsync();
+            Console.WriteLine($"Startup info: synchronized {legacyMembershipPackages.Count} membership package(s) from 5k to 30k.");
+        }
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Startup warning: membership price sync skipped due to database error: {ex.Message}");
+    }
 }
 
 // Seed database on startup (comment out after first successful run)
