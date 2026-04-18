@@ -180,12 +180,12 @@ public class SubscriptionService : ISubscriptionService
             {
                 OrderCode = orderCode,
                 Amount = amountVnd,
-                Description = $"{package.BillingCycle} - {package.Name}",
+                Description = $"{package.BillingCycle} - {NormalizePackageName(package.Name)}",
                 ReturnUrl = _returnUrl,
                 CancelUrl = _cancelUrl,
                 Items = new List<PaymentLinkItem>
                 {
-                    new PaymentLinkItem { Name = package.Name, Quantity = 1, Price = amountVnd }
+                    new PaymentLinkItem { Name = NormalizePackageName(package.Name), Quantity = 1, Price = amountVnd }
                 }
             };
 
@@ -263,7 +263,7 @@ public class SubscriptionService : ISubscriptionService
 
             await SendSubscriptionActivationEmailAsync(
                 subscription.UserId,
-                subscription.SubscriptionPackage?.Name ?? "Subscription",
+                NormalizePackageName(subscription.SubscriptionPackage?.Name),
                 subscription.EndDate);
 
             return ServiceResult<bool>.SuccessResult(true);
@@ -317,7 +317,7 @@ public class SubscriptionService : ISubscriptionService
 
             await SendSubscriptionActivationEmailAsync(
                 pendingSubscription.UserId,
-                pendingSubscription.SubscriptionPackage?.Name ?? "Subscription",
+                NormalizePackageName(pendingSubscription.SubscriptionPackage?.Name),
                 pendingSubscription.EndDate);
 
             return ServiceResult<bool>.SuccessResult(true);
@@ -378,7 +378,7 @@ public class SubscriptionService : ISubscriptionService
             {
                 HasMembership = true,
                 SubscriptionId = sub.Id,
-                PackageName = sub.SubscriptionPackage?.Name,
+                PackageName = NormalizePackageName(sub.SubscriptionPackage?.Name),
                 StartDate = sub.StartDate,
                 EndDate = sub.EndDate,
                 Status = sub.Status
@@ -419,8 +419,8 @@ public class SubscriptionService : ISubscriptionService
     private static SubscriptionPackageDto MapToPackageDto(SubscriptionPackage p) => new()
     {
         Id = p.Id,
-        Name = p.Name,
-        Description = p.Description,
+        Name = NormalizePackageName(p.Name),
+        Description = NormalizePackageDescription(p.Description),
         Price = p.Price,
         BillingCycle = p.BillingCycle,
         IsActive = p.IsActive,
@@ -441,7 +441,7 @@ public class SubscriptionService : ISubscriptionService
         Id = s.Id,
         UserId = s.UserId,
         SubscriptionPackageId = s.SubscriptionPackageId,
-        PackageName = s.SubscriptionPackage?.Name ?? string.Empty,
+        PackageName = NormalizePackageName(s.SubscriptionPackage?.Name),
         StartDate = s.StartDate,
         EndDate = s.EndDate,
         IsActive = s.IsActive,
@@ -449,6 +449,28 @@ public class SubscriptionService : ISubscriptionService
         NextBillingDate = s.NextBillingDate,
         AmountPaid = s.AmountPaid
     };
+
+    private static string NormalizePackageName(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return "Subscription";
+        }
+
+        return name.Trim().Equals("5K", StringComparison.OrdinalIgnoreCase)
+            ? "Premium"
+            : name;
+    }
+
+    private static string? NormalizePackageDescription(string? description)
+    {
+        if (string.IsNullOrWhiteSpace(description))
+        {
+            return description;
+        }
+
+        return description.Replace("5.000", "30.000", StringComparison.Ordinal);
+    }
 
     private static string? GetFirstNonEmpty(params string?[] values)
     {

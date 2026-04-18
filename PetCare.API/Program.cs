@@ -414,7 +414,10 @@ using (var scope = app.Services.CreateScope())
     {
         var context = scope.ServiceProvider.GetRequiredService<PetCareDbContext>();
         var legacyMembershipPackages = await context.SubscriptionPackages
-            .Where(p => p.IsActive && (p.Price == 5000m || p.Name == "5K"))
+            .Where(p => p.IsActive && (
+                p.Price == 5000m
+                || p.Name == "5K"
+                || (p.Description != null && p.Description.Contains("5.000"))))
             .ToListAsync();
 
         if (legacyMembershipPackages.Count > 0)
@@ -422,15 +425,26 @@ using (var scope = app.Services.CreateScope())
             foreach (var package in legacyMembershipPackages)
             {
                 package.Price = 30000m;
+
+                if (package.Name == "5K")
+                {
+                    package.Name = "Premium";
+                }
+
+                if (!string.IsNullOrWhiteSpace(package.Description)
+                    && package.Description.Contains("5.000", StringComparison.Ordinal))
+                {
+                    package.Description = package.Description.Replace("5.000", "30.000", StringComparison.Ordinal);
+                }
             }
 
             await context.SaveChangesAsync();
-            Console.WriteLine($"Startup info: synchronized {legacyMembershipPackages.Count} membership package(s) from 5k to 30k.");
+            Console.WriteLine($"Startup info: synchronized {legacyMembershipPackages.Count} legacy membership package(s) to Premium/30k.");
         }
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"Startup warning: membership price sync skipped due to database error: {ex.Message}");
+        Console.WriteLine($"Startup warning: membership package sync skipped due to database error: {ex.Message}");
     }
 }
 
