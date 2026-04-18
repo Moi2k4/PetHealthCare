@@ -76,9 +76,9 @@ public class SubscriptionService : ISubscriptionService
                     },
                     new()
                     {
-                        Name = "5K",
-                        Description = "Goi nang cao voi day du tinh nang chinh o muc phi 5.000 VND.",
-                        Price = 5000,
+                        Name = "Premium",
+                        Description = "Goi nang cao voi day du tinh nang chinh o muc phi 30.000 VND.",
+                        Price = 30000,
                         BillingCycle = "Month",
                         IsActive = true,
                         HasAIHealthTracking = true,

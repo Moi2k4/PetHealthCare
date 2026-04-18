@@ -16,6 +16,7 @@ public static class DbInitializer
             // Check if data already exists
             if (await context.Roles.AnyAsync())
             {
+                await EnsureMembershipPricingAsync(context);
                 return; // Database has been seeded
             }
 
@@ -181,7 +182,7 @@ public static class DbInitializer
                 {
                     Name                     = "Gói Premium",
                     Description              = "Theo dõi sức khỏe AI, nhắc nhở tiêm phòng và phân tích dinh dưỡng cho thú cưng.",
-                    Price                    = 5000,
+                    Price                    = 30000,
                     BillingCycle             = "Month",
                     IsActive                 = true,
                     HasAIHealthTracking      = true,
@@ -205,6 +206,21 @@ public static class DbInitializer
             Console.WriteLine($"Error seeding database: {ex.Message}");
             throw;
         }
+    }
+
+    private static async Task EnsureMembershipPricingAsync(PetCareDbContext context)
+    {
+        var premiumPackage = await context.SubscriptionPackages
+            .FirstOrDefaultAsync(p => p.Name == "Gói Premium");
+
+        if (premiumPackage == null || premiumPackage.Price == 30000)
+        {
+            return;
+        }
+
+        premiumPackage.Price = 30000;
+        await context.SaveChangesAsync();
+        Console.WriteLine("✓ Updated 'Gói Premium' price to 30000");
     }
 
     /// <summary>
